@@ -195,7 +195,7 @@ A simple configuration looks like:
 
 <P>
 
-<PRE>    &lt;FilesMatch &quot;*.html&quot;&gt;
+<PRE>    &lt;FilesMatch &quot;\.html$&quot;&gt;
         SetHandler perl-script
         PerlHandler HTML::Mason::ApacheHandler
     &lt;/FilesMatch&gt;
@@ -641,6 +641,14 @@ Correponds to the <A HREF="././Admin.html#item_debug_perl_binary">debug_perl_bin
 
 <P>
 
+<LI><STRONG><A NAME="item_MasonDeclineDirs">MasonDeclineDirs - boolean
+
+</A></STRONG>
+Corresponds to the <A HREF="././ApacheHandler.html#item_decline_dirs">decline_dirs</A> parameter.
+
+
+<P>
+
 <LI><STRONG><A NAME="item_MasonErrorMode">MasonErrorMode - string
 
 </A></STRONG>
@@ -767,9 +775,10 @@ HTML::Mason::ApacheHandler.
 
 <P>
 
-<PRE>    &lt;FilesMatch &quot;*.html&quot;&gt;
+<PRE>    &lt;FilesMatch &quot;\.html$&quot;&gt;
         SetHandler perl-script
-        PerlHandler HTML::Mason   # notice - no ::ApacheHandler!
+        # notice - no ::ApacheHandler!
+        PerlHandler HTML::Mason
     &lt;/FilesMatch&gt;
 </PRE>
 

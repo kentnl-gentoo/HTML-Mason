@@ -63,15 +63,15 @@ A simple configuration looks like:
     PerlSetVar MasonDataDir /usr/local/www/mason
     PerlModule HTML::Mason::ApacheHandler
 
-    <FilesMatch "*.html">
+    <FilesMatch "\.html$">
         SetHandler perl-script
         PerlHandler HTML::Mason::ApacheHandler
     </FilesMatch>
 
 C<MasonCompRoot> specifies the I<component root>, the top of your
 component source tree. In simple configurations the component root is
-the same as the server's C<DocumentRoot>. (See CONFIGURING VIRTUAL
-SITES to understand why the component root and C<DocumentRoot> might
+the same as the server's C<DocumentRoot>. (See L<CONFIGURING VIRTUAL
+SITES> to understand why the component root and C<DocumentRoot> might
 differ.)
 
 When Mason handles a request, the requested filename must be
@@ -133,8 +133,8 @@ older than 1.24.
 =back
 
 Almost all of Mason's configuration parameters correspond to new()
-parameters for the B<HTML::Mason::Parser>,
-B<HTML::Mason::Interp>, and B<HTML::Mason::ApacheHandler>
+parameters for the B<L<HTML::Mason::Parser>>,
+B<L<HTML::Mason::Interp>>, and B<L<HTML::Mason::ApacheHandler>>
 objects. Configuration parameters are named predictably by taking the
 mixed-caps form of the new() parameter and prefixing "Mason".  For
 example, comp_root becomes MasonCompRoot and data_dir becomes
@@ -199,7 +199,7 @@ values such as:
  PerlAddVar  MasonCompRoot  "root1 => /foo/comp/root1"
  PerlAddVar  MasonCompRoot  "shared => /my/shared/comps"
 
-See the Multiple component roots section for more details on
+See the L<Multiple component roots> section for more details on
 multiple component roots.
 
 =item * MasonDataDir - string (required)
@@ -312,6 +312,10 @@ Correponds to the C<debug_mode> parameter.
 
 Correponds to the C<debug_perl_binary> parameter.
 
+=item * MasonDeclineDirs - boolean
+
+Corresponds to the C<decline_dirs> parameter.
+
 =item * MasonErrorMode - string
 
 Correponds to the C<error_mode> parameter.
@@ -332,7 +336,7 @@ These are the only parameters that do I<not> correspond to new() parameters.
 
 Valid values for this parameter are C<CGI> or C<mod_perl>.  This
 determines whether to use the C<CGI> or C<Apache::Request> module for
-argument handling.  Please see HTML::Mason::ApacheHandler/PARAMETERS TO THE use() DECLARATION
+argument handling.  Please see L<HTML::Mason::ApacheHandler/PARAMETERS TO THE use() DECLARATION>
 for more details.
 
 This can only be set once, regardless of how you set
@@ -391,9 +395,10 @@ HTML::Mason::ApacheHandler.
 
     PerlRequire /path/to/handler.pl
 
-    <FilesMatch "*.html">
+    <FilesMatch "\.html$">
         SetHandler perl-script
-        PerlHandler HTML::Mason   # notice - no ::ApacheHandler!
+        # notice - no ::ApacheHandler!
+        PerlHandler HTML::Mason
     </FilesMatch>
 
 =head2 Creating the Mason objects
@@ -409,8 +414,8 @@ These objects have a fair number of possible parameters. Only two of
 them are required, I<comp_root> and I<data_dir>; these are discussed
 in the next two subsections. The various parameters are documented in
 the individual reference manuals for each object:
-B<HTML::Mason::Parser>, B<HTML::Mason::Interp>, and
-B<HTML::Mason::ApacheHandler>.
+B<L<HTML::Mason::Parser>>, B<L<HTML::Mason::Interp>>, and
+B<L<HTML::Mason::ApacheHandler>>.
 
 The advantage of embedding these parameters in objects is that
 advanced configurations can create more than one set of objects,
@@ -560,21 +565,21 @@ package that components execute in, by default B<HTML::Mason::Commands>:
       use vars qw($dbh %session);
     }
 
-Alternatively you can use the Parser/allow_globals parameter or method:
+Alternatively you can use the L<HTML::Mason::Parser/allow_globals> parameter or method:
 
     my $parser = new HTML::Mason::Parser (..., allow_globals => [qw($dbh %session)]);
     $parser->allow_globals(qw($foo @bar))
 
 The only advantage to C<allow_globals> is that it will do
 the right thing if you've chosen a different package for components
-to run in (via the Parser/in_package Parser parameter.)
+to run in (via the L<HTML::Mason::Parser/in_package> Parser parameter.)
 
 Similarly, to initialize the variable in C<handler.pl>, you need to
 set it in the component package:
 
    $HTML::Mason::Commands::dbh = DBI->connect(...);
 
-Alternatively you can use the Interp/set_global Interp method:
+Alternatively you can use the L<HTML::Mason::Interp/set_global> Interp method:
 
     $interp->set_global(dbh => DBI->connect(...));
 
@@ -673,7 +678,7 @@ handle a request for /foo/bar.
 If you would like Mason to handle directory requests, do the
 following:
 
-1. Set the ApacheHandler/decline_dirs ApacheHandler parameter to 0.
+1. Set the L<HTML::Mason::ApacheHandler/decline_dirs> ApacheHandler parameter to 0.
 
 2. If your C<handler.pl> contains the standard "return -1" line to
 decline non-text requests (as given in the previous section), add a
@@ -834,7 +839,7 @@ allows the developer to select a variety of options such as time,
 browser, and display mode.  The set of these options together is
 called a previewer configuration. Configurations can be saved under
 one of several preview ports. For more information on how the
-previewer is used, see B<HTML::Mason::Devel>.
+previewer is used, see B<L<HTML::Mason::Devel>>.
 
 Follow these steps to activate the Previewer:
 
@@ -1033,7 +1038,7 @@ to administer them.
 When Mason loads a component, it places it in a memory cache.
 
 The maximum size of the cache is specified with the
-Interp/code_cache_max_size Interp parameter; default is 10MB.
+L<HTML::Mason::Interp/code_cache_max_size> Interp parameter; default is 10MB.
 When the cache fills up, Mason frees up space by discarding a
 number of components. The discard algorithm is least frequently used
 (LFU), with a periodic decay to gradually eliminate old frequency
@@ -1048,19 +1053,19 @@ overhead.  Your process growth will not match the code cache
 size exactly.
 
 You can monitor the performance of the memory cache by turning on
-system logs and counting the COMP_LOAD events. If these are
+L<system logs> and counting the COMP_LOAD events. If these are
 occurring frequently even for a long-running process, you may want to
 increase the size of your code cache.
 
 You can prepopulate the cache with components that you know will be
-accessed often; see Preloading. Note that preloaded components
+accessed often; see L<Preloading>. Note that preloaded components
 possess no special status in the cache and can be discarded like any
 others.
 
 Naturally, a cache entry is invalidated if the corresponding component
 source file changes.
 
-To turn off code caching completely, set Interp/code_cache_max_size to
+To turn off code caching completely, set L<HTML::Mason::Interp/code_cache_max_size> to
 0.
 
 =head2 Object files
@@ -1086,13 +1091,13 @@ If you change any Parser options, you must remove object files
 previously created under that parser for the changes to take effect.
 
 If for some reason you don't want Mason to create object files, set
-the Interp/use_object_files Interp parameter to 0.
+the L<HTML::Mason::Interp/use_object_files> Interp parameter to 0.
 
 =head2 Preloading
 
 You can tell Mason to preload a set of components in the parent
 process, rather than loading them on demand, using the
-Interp/preloads Interp parameter.  Each child server will start
+L<HTML::Mason::Interp/preloads> Interp parameter.  Each child server will start
 with those components loaded in the memory cache. The trade-offs are:
 
 =over
@@ -1127,7 +1132,7 @@ behavior in two ways:
 1.  Does not check component source files at all, relying solely on
 object files.  This means the developer or an automated system is
 responsible for recompiling any components that change and recreating
-object files, using the Parser/make_component Parser method.
+object files, using the L<HTML::Mason::Parser/make_component> Parser method.
 
 2.  Rather than continuously checking whether object files have
 changed, Mason monitors a "reload file" containing an ever-growing
@@ -1136,7 +1141,7 @@ the developer or an automated system is responsible for appending the
 component path to the reload file. The reload file is kept in
 C<data_dir/etc/reload.lst>.
 
-You can activate this mode with the Interp/use_reload_file
+You can activate this mode with the L<HTML::Mason::Interp/use_reload_file>
 Interp method.
 
 The advantage of using this mode is that Mason stats one file per
@@ -1175,8 +1180,8 @@ context such as the middle of a table which never gets closed. In batch
 mode, the error message is output neatly and alone.
 
 Batch mode also offers more flexibility in controlling HTTP
-headers (see Devel/sending_http_headers) and in handling
-mid-request error conditions (see Request/clear_buffer).
+headers (see L<HTML::Mason::Devel/sending_http_headers>) and in handling
+mid-request error conditions (see L<HTML::Mason::Request/clear_buffer>).
 
 Stream mode may help get data to the browser more quickly, allowing
 server and browser to work in parallel. It also prevents memory
@@ -1335,9 +1340,9 @@ Jonathan Swartz, swartz@pobox.com and Dave Rolsky, autarch@urth.org
 
 =head1 SEE ALSO
 
-HTML::Mason,
-HTML::Mason::Parser,
-HTML::Mason::Interp,
-HTML::Mason::ApacheHandler
+L<HTML::Mason>,
+L<HTML::Mason::Parser>,
+L<HTML::Mason::Interp>,
+L<HTML::Mason::ApacheHandler>
 
 =cut

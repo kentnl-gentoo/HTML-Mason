@@ -44,7 +44,7 @@ Mason - High-performance, dynamic web site authoring system
 
 <P>
 
-<PRE>    &lt;FilesMatch &quot;*.html&quot;&gt;
+<PRE>    &lt;FilesMatch &quot;\.html$&quot;&gt;
         SetHandler perl-script
         PerlHandler HTML::Mason::ApacheHandler
     &lt;/FilesMatch&gt;
@@ -239,7 +239,7 @@ httpd.conf. You can find an annotated version of these lines in
 
 <P>
 
-<PRE>    &lt;FilesMatch &quot;*.html&quot;&gt;
+<PRE>    &lt;FilesMatch &quot;\.html$&quot;&gt;
         SetHandler perl-script
         PerlHandler HTML::Mason::ApacheHandler
     &lt;/FilesMatch&gt;
@@ -265,7 +265,7 @@ installed somewhere in your Perl <CODE>@INC</CODE> for this to work.
 
 <P>
 
-Finally, the &lt;FilesMatch&gt; section routes all ``*.html'' requests to
+Finally, the &lt;FilesMatch&gt; section routes all ``\.html$'' requests to
 the Mason handler. If you want all Mason pages to have a distinct extension
 like ``.mcomp'', use that instead. If you wish to restrict Mason to one
 subdirectory at first, do this:
@@ -274,7 +274,7 @@ subdirectory at first, do this:
 <P>
 
 <PRE>    &lt;Directory /path/to/subdirectory&gt;
-        &lt;FilesMatch &quot;*.html&quot;&gt;
+        &lt;FilesMatch &quot;\.html$&quot;&gt;
             SetHandler perl-script
             PerlHandler HTML::Mason::ApacheHandler
         &lt;/FilesMatch&gt;

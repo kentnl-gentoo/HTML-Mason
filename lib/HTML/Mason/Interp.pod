@@ -17,7 +17,7 @@ which internally calls the Interp implementation methods. In that case
 the only user method is the new() constructor.
 
 If you want to call components outside of mod_perl (e.g. from CGI or a
-stand-alone Perl script), see the STANDALONE MODE section below.
+stand-alone Perl script), see the L<STANDALONE MODE> section below.
 
 =head1 PARAMETERS FOR new() CONSTRUCTOR
 
@@ -28,7 +28,7 @@ stand-alone Perl script), see the STANDALONE MODE section below.
 True or undef. Default is true as of verison 0.85. If true,
 autohandlers apply both to their own directories and all
 subdirectories; if undef, only to their own directories. See the
-Devel/autohandlers section of the Component Developer's Guide for a
+L<HTML::Mason::Devel/autohandlers> section of the Component Developer's Guide for a
 discussion of the pros and cons.
 
 =item autohandler_name
@@ -44,7 +44,7 @@ where components are stored. e.g.
     code_cache_max_size => 20*1024*1024
     code_cache_max_size => 20_000_000
 
-Default is 10 MB. See the Admin/Code Cache section of the I<Admin Guide>
+Default is 10 MB. See the L<HTML::Mason::Admin/Code Cache> section of the I<Admin Guide>
 for further details.
 
 =item comp_root
@@ -136,7 +136,7 @@ batch mode Mason computes the entire page in a memory buffer and then
 transmits it all at once. In stream mode Mason outputs data as soon as
 it is computed. (This does not take into account buffering done by
 Apache or the O/S.) The default mode is batch.  See the 
-Admin/staging vs production section of the I<Admin Guide> for a
+L<HTML::Mason::Admin/staging vs production> section of the I<Admin Guide> for a
 discussion of the trade-offs.
 
 =item parser
@@ -152,7 +152,7 @@ when the interpreter initializes. e.g.
     preloads => ['/foo/index.html','/bar/*.pl']
 
 Default is the empty list. This should only be used for components that
-are frequently viewed and rarely updated.  See the Admin/preloading
+are frequently viewed and rarely updated.  See the L<HTML::Mason::Admin/preloading>
 section of the I<Admin Guide> for further details.
 
 =item static_file_root
@@ -205,7 +205,7 @@ should be left alone.
 
 True or undef, default is undef. If true, disables Mason's automatic
 timestamp checking on component source files, relying instead on an
-explicitly updated Admin/reload file.
+explicitly updated L<HTML::Mason::Admin/reload file>.
 
 =back
 
@@ -245,7 +245,7 @@ in the case of a list or hash.  For example:
 
 The global is set in the package that components run in: usually
 C<HTML::Mason::Commands>, although this can be overridden via the
-Parser parameter Parser/in_package.  The lines above, for example,
+Parser parameter L<HTML::Mason::Parser/in_package>.  The lines above, for example,
 are equivalent to:
 
     $HTML::Mason::Commands::dbh = DBI->connect(...);
@@ -254,7 +254,7 @@ are equivalent to:
 assuming that C<in_package> has not been changed.
 
 Any global that you set should also be registered with the Parser
-parameter Parser/allow_globals; otherwise you'll get warnings from
+parameter L<HTML::Mason::Parser/allow_globals>; otherwise you'll get warnings from
 C<strict>.
 
 =back
@@ -390,9 +390,9 @@ Jonathan Swartz, swartz@pobox.com
 
 =head1 SEE ALSO
 
-HTML::Mason,
-HTML::Mason::Parser,
-HTML::Mason::ApacheHandler,
-HTML::Mason::Admin
+L<HTML::Mason>,
+L<HTML::Mason::Parser>,
+L<HTML::Mason::ApacheHandler>,
+L<HTML::Mason::Admin>
 
 =cut

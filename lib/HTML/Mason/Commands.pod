@@ -5,7 +5,7 @@ HTML::Mason::Commands - Old Mason command reference
 =head1 DESCRIPTION
 
 This was the documentation for the C<mc_> command set. In Mason 0.8 and
-beyond, C<mc_> commands have been replaced by the new B<HTML::Mason::Request> API. e.g.
+beyond, C<mc_> commands have been replaced by the new B<L<HTML::Mason::Request>> API. e.g.
 
    mc_comp becomes $m->comp
    mc_file becomes $m->file
@@ -97,8 +97,8 @@ C<mc_time> becomes C<$m-E<gt>time>
 =item *
 
 C<mc_suppress_http_header> (with or without argument) no longer has
-any effect and can simply be removed. See Devel/Sending HTTP
-Headers for more information.
+any effect and can simply be removed. See L<HTML::Mason::Devel/Sending HTTP
+Headers> for more information.
 
 =back
 
@@ -108,7 +108,7 @@ Jonathan Swartz, swartz@pobox.com
 
 =head1 SEE ALSO
 
-HTML::Mason,
-HTML::Mason::Devel
+L<HTML::Mason>,
+L<HTML::Mason::Devel>
 
 =cut

@@ -70,20 +70,20 @@ automatically send HTTP headers before sending content back to the
 client. If you set to false, you should call $r->send_http_header
 manually.
 
-See the Devel/sending_http_headers of the Component Developer's
+See the L<HTML::Mason::Devel/sending_http_headers> of the Component Developer's
 Guide for details about the automatic header feature.
 
 =item debug_handler_proc, debug_handler_script, debug_mode, debug_perl_binary
 
 The B<debug_*> parameters control Mason's use of debug files.
-Component Admin/debugging procedures are fully described in the I<Mason
+Component L<HTML::Mason::Admin/debugging> procedures are fully described in the I<Mason
 Administrator's Guide>.
 
 =item decline_dirs
 
 Indicates whether Mason should decline directory requests, leaving
 Apache to serve up a directory index or a FORBIDDEN error as
-appropriate. Default is 1. See Admin/Allowing directory requests
+appropriate. Default is 1. See L<HTML::Mason::Admin/Allowing directory requests>
 for more information about handling directories with Mason.
 
 =item error_mode
@@ -108,12 +108,12 @@ much longer, but may include information accidentally omitted by
 Mason's processing.
 
 Regardless of this setting, no readability processing occurs if you
-have overriden the Interp/die_handler Interp parameter.
+have overriden the L<HTML::Mason::Interp/die_handler> Interp parameter.
 
 =item output_mode
 
 This parameter has been replaced by the equivalent Interp parameter
-Interp/out_mode. For backward compatibility, setting
+L<HTML::Mason::Interp/out_mode>. For backward compatibility, setting
 C<$ah-E<gt>output_mode> will cause C<$interp-E<gt>out_mode> to be set
 appropriately.
 
@@ -129,7 +129,7 @@ component.  It then returns either a true (serve component) or false
 (reject component). In this example, the predicate rejects requests
 for components whose name starts with an "_" character:
 
-    top_level_predicate => sub { $_[0] !~ m{/_[^/]+$}
+    top_level_predicate => sub { $_[0] !~ m{/_[^/]+$} }
 
 =back
 
@@ -149,9 +149,9 @@ Jonathan Swartz, swartz@pobox.com
 
 =head1 SEE ALSO
 
-HTML::Mason,
-HTML::Mason::Parser,
-HTML::Mason::Interp,
-HTML::Mason::Admin
+L<HTML::Mason>,
+L<HTML::Mason::Parser>,
+L<HTML::Mason::Interp>,
+L<HTML::Mason::Admin>
 
 =cut

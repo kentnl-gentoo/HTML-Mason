@@ -8,7 +8,7 @@ Mason - High-performance, dynamic web site authoring system
     PerlSetVar MasonDataDir /usr/local/www/mason
     PerlModule HTML::Mason::ApacheHandler
 
-    <FilesMatch "*.html">
+    <FilesMatch "\.html$">
         SetHandler perl-script
         PerlHandler HTML::Mason::ApacheHandler
     </FilesMatch>
@@ -71,7 +71,7 @@ Mason is optimized for use with mod_perl, but can also be used from
 CGI or as a standalone tool to generate other types of dynamic text
 files (similar to Text::Template, ePerl, etc.). To learn more about
 this option see the STANDALONE MODE section in
-B<HTML::Mason::Interp>.
+B<L<HTML::Mason::Interp>>.
 
 =back
 
@@ -101,7 +101,7 @@ Beyond this trivial example, components can also embed serious chunks
 of Perl code (say, to pull records from a database). They can also
 call other components, cache results for later reuse, and perform all
 the tricks you expect from a regular Perl program. See
-B<HTML::Mason::Devel> for a full tutorial on building, using and
+B<L<HTML::Mason::Devel>> for a full tutorial on building, using and
 debugging Mason components.
 
 =head1 INSTALLATION
@@ -130,7 +130,7 @@ C<eg/httpd.conf> in your distribution.
     PerlSetVar MasonDataDir /usr/local/www/mason
     PerlModule HTML::Mason::ApacheHandler
 
-    <FilesMatch "*.html">
+    <FilesMatch "\.html$">
         SetHandler perl-script
         PerlHandler HTML::Mason::ApacheHandler
     </FilesMatch>
@@ -146,13 +146,13 @@ create this directory on startup if necessary.
 The third directive loads Mason with Apache support. Mason
 must be installed somewhere in your Perl @INC for this to work.
 
-Finally, the <FilesMatch> section routes all "*.html" requests to the
+Finally, the <FilesMatch> section routes all "\.html$" requests to the
 Mason handler. If you want all Mason pages to have a distinct
 extension like ".mcomp", use that instead. If you wish to restrict
 Mason to one subdirectory at first, do this:
 
     <Directory /path/to/subdirectory>
-        <FilesMatch "*.html">
+        <FilesMatch "\.html$">
             SetHandler perl-script
             PerlHandler HTML::Mason::ApacheHandler
         </FilesMatch>
@@ -177,24 +177,24 @@ reload this page and see a "4", Mason is working!
 =head1 DOCUMENTATION ROADMAP
 
 Once Mason is on its feet, the next step is to write a component or
-two. The I<Mason Developer's Manual> (B<HTML::Mason::Devel>) 
+two. The I<Mason Developer's Manual> (B<L<HTML::Mason::Devel>>) 
 is a complete tutorial for writing, using, and debugging components. A
 reference companion to the Developer's Manual is the Request API
-documentation, B<HTML::Mason::Request>.
+documentation, B<L<HTML::Mason::Request>>.
 
 Whoever is responsible for setting up and tuning Mason should read the
-I<Administrator's Manual> (B<HTML::Mason::Admin>). This document
+I<Administrator's Manual> (B<L<HTML::Mason::Admin>>). This document
 covers more advanced configuration scenarios and performance
 optimization. Reference companions to the Administrator's Manual
-include B<HTML::Mason::Parser>, B<HTML::Mason::Interp>, and
-B<HTML::Mason::ApacheHandler>.
+include B<L<HTML::Mason::Parser>>, B<L<HTML::Mason::Interp>>, and
+B<L<HTML::Mason::ApacheHandler>>.
 
 Most of this documentation assumes that you're running Mason on top of
 mod_perl, since that is the most common configuration.  If you are
 using Mason outside of mod_perl, the documentation is still valid;
 you'll just have to ignore mod_perl specific references like $r and
 the ApacheHandler object, and you'll want to read the STANDALONE MODE section in
-B<HTML::Mason::Interp>.
+B<L<HTML::Mason::Interp>>.
 
 =head1 AUTHORS
 
@@ -202,12 +202,12 @@ Jonathan Swartz, swartz@pobox.com and Dave Rolsky, autarch@urth.org
 
 =head1 SEE ALSO
 
-HTML::Mason::Devel,
-HTML::Mason::Request,
-HTML::Mason::Component,
-HTML::Mason::Admin,
-HTML::Mason::Parser,
-HTML::Mason::Interp,
-HTML::Mason::ApacheHandler
+L<HTML::Mason::Devel>,
+L<HTML::Mason::Request>,
+L<HTML::Mason::Component>,
+L<HTML::Mason::Admin>,
+L<HTML::Mason::Parser>,
+L<HTML::Mason::Interp>,
+L<HTML::Mason::ApacheHandler>
 
 =cut
