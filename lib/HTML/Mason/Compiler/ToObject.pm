@@ -16,11 +16,11 @@ BEGIN
     __PACKAGE__->valid_params
 	(
 	 comp_class    => { parse => 'string',  type => SCALAR, default => 'HTML::Mason::Component',
-			    descr => "The class into which component object should be blessed" },
+			    descr => "The class into which component objects will be blessed" },
 	 subcomp_class => { parse => 'string',  type => SCALAR, default => 'HTML::Mason::Component::Subcomponent',
-			    descr => "The class into which subcomponent objects should be blessed" },
+			    descr => "The class into which subcomponent objects will be blessed" },
 	 in_package => { parse => 'string',  type => SCALAR, default => 'HTML::Mason::Commands',
-			 descr => "The package in which component execution should take place" },
+			 descr => "The package in which component execution will take place" },
 	 preamble   => { parse => 'string',  type => SCALAR, default => '',
 			 descr => "A chunk of Perl code to add to the beginning of each compiled component" },
 	 postamble  => { parse => 'string',  type => SCALAR, default => '',
@@ -76,7 +76,7 @@ sub compiled_component
     my $id = $self->object_id;
     $id =~ s,([\\']),\\$1,g;
     $params->{compiler_id} = "'$id'";
-    $params->{create_time} = time;
+    $params->{load_time} = time;
 
     $params->{subcomps} = '\%_def' if %{ $self->{def} };
     $params->{methods} = '\%_method' if %{ $self->{method} };
@@ -284,46 +284,69 @@ sub _finish_filter
 	   );
 }
 
+my %coercion_funcs = ( '@' => 'HTML::Mason::Tools::coerce_to_array',
+		       '%' => 'HTML::Mason::Tools::coerce_to_hash',
+		     );
 sub _arg_declarations
 {
     my $self = shift;
 
-    my @args;
+    my @decl;
+    my @assign;
+    my @required;
+
     foreach ( @{ $self->{current_comp}{args} } )
     {
-	my $default_val = ( defined $_->{default} ?
-			    $_->{default} :
-			    qq|HTML::Mason::Exception::Params->throw( error => "no value sent for required parameter '$_->{name}'" )|,
-			  );
-	# allow for comments after default declaration
-	$default_val .= "\n" if defined $_->{default} && $_->{default} =~ /\#/;
+	my $var_name = "$_->{type}$_->{name}";
+	push @decl, $var_name;
 
-	if ( $_->{type} eq '$' )
+	my $coerce;
+	if ( $coercion_funcs{ $_->{type} } )
 	{
-	    push @args,
-		( "my $_->{type}$_->{name} = !exists \$ARGS{'$_->{name}'} ? $default_val : \$ARGS{'$_->{name}'};" );
+	    $coerce = $coercion_funcs{ $_->{type} } . "(\$ARGS{'$_->{name}'}, '$var_name')";
 	}
-	# Array
-	elsif ( $_->{type} eq '@' )
+	else
 	{
-	    push @args, ( "my $_->{type}$_->{name} = ( !exists \$ARGS{'$_->{name}'} ? $default_val :",
-			  "UNIVERSAL::isa( \$ARGS{'$_->{name}'}, 'ARRAY' ) ? \@{ \$ARGS{'$_->{name}'}}  : ( \$ARGS{'$_->{name}'} ) );",
-			);
-	}
-	# Hash
-	elsif ( $_->{type} eq "\%" )
-	{
-	    push @args, ( "my $_->{type}$_->{name} = ( !exists \$ARGS{'$_->{name}'} ? $default_val :",
-			  "UNIVERSAL::isa( \$ARGS{'$_->{name}'}, 'ARRAY' ) ? \@{ \$ARGS{'$_->{name}'} } : ",
-			  "UNIVERSAL::isa( \$ARGS{'$_->{name}'}, 'HASH' ) ? \%{ \$ARGS{'$_->{name}'} } : ",
-			  qq|HTML::Mason::Exception::Params->throw( error => "single value sent for hash parameter '$_->{type}$_->{name}'" ) );|,
-			);
+	    $coerce = "\$ARGS{'$_->{name}'}";
 	}
 
-	push @args, "\n";
+	push @assign, "#line $_->{line} $_->{file}\n"
+	    if defined $_->{line} && defined $_->{file};
+	if ( defined $_->{default} )
+	{
+	    my $default_val = $_->{default};
+	    # allow for comments after default declaration
+	    $default_val .= "\n" if defined $_->{default} && $_->{default} =~ /\#/;
+
+	    push @assign,
+		"$_->{type}$_->{name} = exists \$ARGS{'$_->{name}'} ? $coerce : $default_val;\n";
+	}
+	else
+	{
+	    push @required, $_->{name};
+
+	    push @assign,
+		"$var_name = $coerce;\n";
+	}
     }
 
-    return @args;
+    # just to be sure
+    local $" = ' ';
+    my @req_check = <<"EOF";
+
+foreach my \$arg ( qw( @required ) )
+{
+    HTML::Mason::Exception::Params->throw
+        ( error => "no value sent for required parameter '\$arg'" )
+        unless exists \$ARGS{\$arg};
+}
+EOF
+
+    my $decl = 'my ( ';
+    $decl .= join ', ', @decl;
+    $decl .= " );\n";
+
+    return @req_check, $decl, @assign;
 }
 
 sub _flags
@@ -384,7 +407,60 @@ HTML::Mason::Compiler::ToObject - A Compiler subclass that generates Mason objec
 
 =head1 DESCRIPTION
 
-This Compiler subclass that generates Mason object code (Perl code).
-It is the default Compiler class.
+This Compiler subclass generates Mason object code (Perl code).  It is
+the default Compiler class used by Mason.
 
-=end
+=head1 PARAMETERS FOR new() CONSTRUCTOR
+
+All of these parameters are optional.
+
+=over
+
+=item comp_class
+
+The class into which component objects are blessed.  This defaults to
+L<C<HTML::Mason::Component>|HTML::Mason::Component>.
+
+=item subcomp_class
+
+The class into which subcomponent objects are blessed.  This defaults
+to L<C<HTML::Mason::Subcomponent>|HTML::Mason::Subcomponent>.
+
+=item in_package
+
+This is the package in which a component's code is executed.  For
+historical reasons, this defaults to C<HTML::Mason::Commands>.
+
+=item preamble
+
+If this parameter is supplied, then the text given is placed at the
+beginning of each component.
+
+=item postamble
+
+Text given for this parameter is placed at the end of each component.
+
+=item use_strict
+
+This indicates whether or not a given component should C<use strict>.
+By default, this is true.
+
+=back
+
+=head1 METHODS
+
+This class is primarily meant to be used by the Interpreter object,
+and as such has a very limited public API.
+
+=over
+
+=item compile (comp_source => $source, name => $name, comp_class = $comp_class)
+
+This method will take component source and return the compiled object
+code for that source.  The C<comp_source> and C<name> parameters are
+optional.  The C<comp_class> can be used to change the component class
+for this one comonent.
+
+=back
+
+=cut

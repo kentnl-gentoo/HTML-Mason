@@ -184,6 +184,8 @@ package HTML::Mason;
 
 $libs
 
+use Apache::Constants qw(REDIRECT);
+
 use HTML::Mason::ApacheHandler;
 use HTML::Mason;
 
@@ -228,6 +230,7 @@ sub handler
     \$r->filename(\$filename);
 
     my \$status = \$ah[\$ah_index]->handle_request(\$r);
+    return \$status if \$status == REDIRECT;
     \$r->print( "Status code: \$status\\n" );
 }
 
@@ -264,7 +267,20 @@ if ( \$ENV{PATH_INFO} =~ s,/autoflush\$,, )
 
 my \$h = HTML::Mason::CGIHandler->new( data_dir  => '$data_dir', \%p );
 
-\$h->handle_request;
+if ( \$ENV{PATH_INFO} =~ s,/handle_comp\$,, )
+{
+    \$h->handle_comp( \$ENV{PATH_INFO} );
+}
+elsif ( \$ENV{PATH_INFO} =~ s,/handle_cgi_object\$,, )
+{
+    my \$cgi = CGI->new;
+    \$cgi->param( 'foo' => 'bar' );
+    \$h->handle_cgi_object( \$cgi );
+}
+else
+{
+    \$h->handle_request;
+}
 EOF
 
     close F;

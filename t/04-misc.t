@@ -20,7 +20,7 @@ sub make_tests
 <& header &>
 Autohandler comp: <% $m->fetch_next->title %>
 % my $buf;
-<% $m->call_next (b=>$a*2) %>
+% $m->call_next(b=>$a*2);
 <& footer &>
 
 <%args>
@@ -67,6 +67,7 @@ The answer is <% $b %>.
 <%args>
 $b
 </%args>
+
 
 
 EOF
@@ -245,7 +246,7 @@ EOF
     $group->add_test( name => 'accessor_validate',
 		      description => 'test accessor parameter validation',
 		      component => <<'EOF',
-% $m->interp->use_object_files([1]);
+% $m->interp->code_cache_max_size([1]);
 EOF
 		      expect_error => qr/Parameter #1 to .*? was an 'arrayref'/,
 		    );

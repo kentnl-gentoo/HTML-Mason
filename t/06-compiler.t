@@ -2,6 +2,7 @@
 
 use strict;
 
+use Config;
 use HTML::Mason::Tests;
 
 my $tests = make_tests();
@@ -277,7 +278,7 @@ EOF
 		    );
 
 #------------------------------------------------------------
-    $group->add_test( name => 'whitespace near </%args>',
+    $group->add_test( name => 'whitespace_near_args',
 		      description => 'test that whitespace is allowed before </%args>',
 		      call_args => [qw(foo foo)],
 		      component => <<'EOF',
@@ -344,6 +345,96 @@ EOF
 <% $m->current_comp->attr_exists('key') ? 'exists' : 'missing' %>
 EOF
 		      expect => "exists\n",
+		    );
+
+#------------------------------------------------------------
+
+    my $error =
+	$] >= 5.006 ? qr/Unterminated <>/ : qr/Might be a runaway multi-line <> string/;
+
+    $group->add_test( name => 'subcomp_parse_error',
+		      description => 'A misnamed block at the beginning of a component was throwing the lexer into an infinite loop.  Now it should be compiled into a component with a syntax error.',
+		      component => <<'EOF',
+<%subcomp .foo>
+ <% 5 %>
+</%subcomp>
+EOF
+		      expect_error => $error,
+		    );
+
+#------------------------------------------------------------
+
+    if ( $Config{d_alarm} || $] >= 5.007003 )
+    {
+	$group->add_test( name => 'infinite_loop',
+			  description => 'this code hangs when Interp.pm attempts to eval it.',
+			  component => <<'EOF',
+<%args>
+ $prev
+ $next
+ $i
+</%args>
+% (my $p = $r->uri) =~ s,/[^/]+$,/,;
+  <% $p %>"><% $dir %>
+  <% $i->{fileroot} %>
+  <% "foo">large</a
+ <% $i->{comment} %>
+EOF
+			  expect_error => qr/Global symbol "\$r"/,
+			);
+    }
+
+#------------------------------------------------------------
+
+    $group->add_test( name => 'error_in_args',
+		      description => 'Test line number reporting for <%args> block',
+		      component => <<'EOF',
+lalalal
+<%args>
+$foo => this should break
+</%args>
+EOF
+		      expect_error => qr/Bareword "break".*error_in_args line 3/,
+		    );
+
+#------------------------------------------------------------
+
+    $group->add_test( name => 'block_end_without_nl',
+		      description => 'Test that a block can end without a newline before it',
+		      component => <<'EOF',
+no newlines<%args>$foo => 1</%args><%attr>foo => 1</%attr><%flags>inherit => undef</%flags>
+EOF
+		      expect => <<'EOF',
+no newlines
+EOF
+		    );
+
+#------------------------------------------------------------
+
+    $group->add_test( name => 'more_block_variations',
+		      description => 'Test various mixture of whitespace with blocks',
+		      component => <<'EOF',
+various
+<%args>
+ $foo => 1</%args>
+<%attr>
+  foo => 1</%attr>
+<%args>$bar => 1
+</%args>
+<%attr>bar => 1
+</%attr>
+<%args>
+ $quux => 1</%args>
+<%attr>
+  quux => 1</%attr>
+<%args>  $baz => 1
+</%args>
+<%attr>  baz => 1
+</%attr>
+EOF
+		      expect => <<'EOF',
+various
+EOF
 		    );
 
 #------------------------------------------------------------

@@ -6,10 +6,11 @@ package HTML::Mason::Interp;
 
 use strict;
 
-use Carp;
+use Config;
 use File::Basename;
 use File::Path;
 use File::Spec;
+use HTML::Mason;
 use HTML::Mason::Request;
 use HTML::Mason::Resolver::File;
 use HTML::Mason::Tools qw(make_fh read_file taint_is_on load_pkg);
@@ -35,16 +36,12 @@ BEGIN
 					   descr => "A Compiler object for compiling components" },
 	 data_dir                     => { parse => 'string', optional => 1, type => SCALAR,
 					   descr => "A directory for storing cache files and other state information" },
-	 dhandler_name                => { parse => 'string',  default => 'dhandler', type => SCALAR,
-					   descr => "The filename to use for Mason's 'dhandler' capability" },
 	 static_source                => { parse => 'boolean', default => 0, type => BOOLEAN,
 					   descr => "When true, we only compile source files once" },
 	 # OBJECT cause qr// returns an object
 	 ignore_warnings_expr         => { parse => 'string',  type => SCALAR|OBJECT,
 					   default => qr/Subroutine .* redefined/i,
 					   descr => "A regular expression describing Perl warning messages to ignore" },
-	 max_recurse                  => { parse => 'string',  default => 32, type => SCALAR,
-					   descr => "The maximum recursion depth for component, inheritance, and request stack" },
 	 preloads                     => { parse => 'list',    optional => 1, type => ARRAYREF,
 					   descr => "A list of components to load immediately when creating the Interpreter" },
 	 resolver                     => { isa => 'HTML::Mason::Resolver',
@@ -66,41 +63,42 @@ BEGIN
 }
 
 use HTML::Mason::MethodMaker
-    ( read_only => [ qw( code_cache
+    ( read_only => [ qw( autohandler_name
+                         code_cache
+                         compiler
+			 data_dir
 			 preloads
-                         source_cache ) ],
+                         static_source
+                         resolver
+                         source_cache
+			 use_object_files
+                        ) ],
 
       read_write => [ map { [ $_ => __PACKAGE__->validation_spec->{$_} ] }
-		      qw( autohandler_name
-		          code_cache_max_size
-			  compiler
-			  data_dir
-			  dhandler_name
-			  static_source
+		      qw( code_cache_max_size
 			  ignore_warnings_expr
-			  max_recurse
-			  resolver
-			  use_object_files )
+                         )
 		    ],
 
-      read_write_contained => { request => [ [ autoflush => { type => BOOLEAN } ],
-					     [ data_cache_defaults => { type => HASHREF } ],
-					     [ out_method => { type => SCALARREF | CODEREF } ],
-					   ]
+      read_write_contained => { request =>
+				[ [ autoflush => { type => BOOLEAN } ],
+				  [ data_cache_defaults => { type => HASHREF } ],
+				  [ dhandler_name => { type => SCALAR } ],
+				  [ max_recurse => { type => SCALAR } ],
+				  [ out_method => { type => SCALARREF | CODEREF } ],
+				]
 			      },
       );
 
 sub new
 {
     my $class = shift;
-
-    my @args = $class->create_contained_objects(@_);
-
-    my $self = bless { validate( @args, $class->validation_spec ),
-		       code_cache => {},
-		       code_cache_current_size => 0,
-		       files_written => [],
-		     }, $class;
+    my $self = $class->SUPER::new(@_);
+    %$self = (%$self,
+		      code_cache => {},
+		      code_cache_current_size => 0,
+		      files_written => [],
+	     );
 
     $self->_initialize;
     return $self;
@@ -132,7 +130,7 @@ sub _initialize
 	    $self->push_files_written(@newdirs);
 	}
     } else {
-	$self->use_object_files(0);
+	$self->{use_object_files} = 0;
     }
 
     #
@@ -187,12 +185,10 @@ sub load {
     my $resolver = $self->{resolver};
 
     #
-    # Given a relative path, call resolver's rel2abs to try and make absolute.
+    # Path must be absolute.
     #
     unless (substr($path, 0, 1) eq '/') {
-	unless ($path = $resolver->rel2abs($path)) {
-	    error "Component paths given to Interp->load must be absolute";
-	}
+	error "Component path given to Interp->load must be absolute (was given $path)";
     }
 
     #
@@ -472,21 +468,40 @@ sub eval_object_code
 
     {
 	local $^W = 1;
-	local $SIG{__WARN__} = $ignore_expr ? sub { $warnstr .= $_[0] if $_[0] !~ /$ignore_expr/ } : sub { $warnstr .= $_[0] };
+	local $SIG{__WARN__} =
+	    ( $ignore_expr ?
+	      sub { $warnstr .= $_[0] if $_[0] !~ /$ignore_expr/ } :
+	      sub { $warnstr .= $_[0] } );
 
-	$comp = eval $object_code;
+	#
+	# We've found at least one generated component that for some
+	# reason never returns from the string eval below.  For
+	# systems that provide alarm we can try to protect against
+	# this.
+	#
+	# This appears to be a Perl bug, fixed in 5.7.3+.  We'll skip
+	# this hack for versions where the bug is fixed.
+	#
+	if ( $Config{d_alarm} && $] < 5.007003 )
+	{
+	    my $sec = 5;
+	    eval
+	    {
+		local $SIG{ALRM} =
+		    sub { die $warnstr };
+		alarm $sec;
+		$comp = eval $object_code;
+		alarm 0;
+		die $@ if $@;
+	    };
+	}
+	else
+	{
+	    $comp = eval $object_code;
+	}
     }
 
     $err = $warnstr . $@;
-
-    #
-    # If no error generated and no component object returned, we
-    # have a prematurely-exited <%once> section or other syntax
-    # accident.
-    #
-    unless (1 or $err or (defined($comp) and (UNIVERSAL::isa($comp, 'HTML::Mason::Component') or ref($comp) eq 'CODE'))) {
-	$err = "could not generate component object (return() in a <%once> section or extra close brace?)";
-    }
 
     unless ($err) {
 	# Yes, I know I always freak out when people start poking
@@ -652,10 +667,6 @@ foreach my $property (sort keys %$interp) {
 % if ($cache = $interp->code_cache and %$cache) {
 %   foreach my $key (sort keys %$cache) {
       <% $key |h%> (modified <% scalar localtime $cache->{$key}->{lastmod} %>)
-%     if (my $cu = $current_url) {
-%       $cu =~ s,\?,/expire_code_cache=$key?,;
-        <a href="<% $cu %>"><i>expire</i></a>
-%     }
       <br>
 %   }
 % } else {
@@ -667,21 +678,13 @@ foreach my $property (sort keys %$interp) {
 <%args>
  $interp   # The interpreter we'll elucidate
  %valid    # Default values for interp member data
- $current_url => ''
 </%args>
 EOF
-
-    my $current_url = '';
-    if (my $r = eval {Apache->request}) {
-	my $path_info = quotemeta $r->path_info;
-	($current_url = $r->uri) =~ s/$path_info$//;
-	$current_url .= '?' . $r->args;
-    }
 
     my $comp = $self->make_component(comp_source => $comp_source);
     my $out;
 
-    my $args = {interp => $self, valid => $self->validation_spec, current_url => $current_url};
+    my $args = [interp => $self, valid => $self->validation_spec];
     $self->make_request(comp=>$comp, args=>$args, out_method=>\$out, %p)->exec;
 
     return $out;
@@ -710,10 +713,6 @@ Interp objects are handed off immediately to an ApacheHandler object
 which internally calls the Interp implementation methods. In that case
 the only user method is the new() constructor.
 
-If you want to call components outside of mod_perl (e.g. from CGI or a
-stand-alone Perl script), see the L<STANDALONE MODE|"STANDALONE MODE">
-section below.
-
 =head1 PARAMETERS FOR new() CONSTRUCTOR
 
 =over
@@ -740,7 +739,7 @@ Guide>|HTML::Mason::Admin/"Code Cache"> for further details.
 
 =item compiler
 
-Compiler object for compiling components on the fly.  If none is
+The Compiler object to associate with this Interpreter.  If none is
 provided a default compiler using the
 C<HTML::Mason::Compiler::ToObject> and C<HTML::Mason::Lexer> classes
 will be created.
@@ -766,10 +765,6 @@ by default,
 These settings are overriden by options given to particular
 C<$m-E<gt>cache> calls.
 
-=item dhandler_name
-
-File name used for dhandlers. Default is "dhandler".
-
 =item static_source
 
 True or false, default is false. When false, Mason checks the
@@ -790,9 +785,9 @@ where updates are infrequent and well-controlled.
 
 =item ignore_warnings_expr
 
-Regular expression indicating which warnings to ignore when compiling
+Regular expression indicating which warnings to ignore when loading
 components. Any warning that is not ignored will prevent the
-component from being compiled and executed. For example:
+component from being loaded and executed. For example:
 
     ignore_warnings_expr =>
         'Global symbol.*requires explicit package'
@@ -802,12 +797,6 @@ If undef, all warnings are heeded; if '.', all warnings are ignored.
 By default, this is set to 'Subroutine .* redefined'.  This allows you
 to declare global subroutines inside <%once> sections and not receive
 an error when the component is reloaded.
-
-=item max_recurse
-
-The maximum recursion depth for the component stack, for the request
-stack, and for the inheritance stack. An error is signalled if the
-maximum is exceeded.  Default is 32.
 
 =item preloads
 
@@ -820,6 +809,11 @@ Default is the empty list.  For maximum performance, this should only
 be used for components that are frequently viewed and rarely updated.
 See the L<preloading section in the I<Admin
 Guide>|HTML::Mason::Admin/preloading> for further details.
+
+=item resolver
+
+The Resolver object to associate with this Interpreter.  If none is
+provided, a default Resolver will be created.
 
 =item use_object_files
 
@@ -913,14 +907,8 @@ Example of usage:
 
 =item load (path)
 
-Given a component path, this method returns the component object for
-that path, if one exists.  In normal operations, this method expects
-to receive an absolute path and will throw an exception if it is not
-given one.
-
-However, if you did not provide a component root and you are using
-Mason's default Resolver class, then relative paths will be treated as
-relative to the current working directory.
+Returns the component object corresponding to an absolute component
+C<path>, or undef if none exists.
 
 =for html <a name="item_comp_root">
 
@@ -932,94 +920,6 @@ resolver class which does not have a C<comp_root> method, then this
 convenience method will not work.
 
 =back
-
-=head1 STANDALONE MODE
-
-Although Mason is most commonly used in conjunction with mod_perl,
-there is also a functional API that allows you to use Mason from CGI
-programs or from stand-alone Perl scripts.
-
-When using Mason outside of mod_perl, just create an Interp object;
-you do not need the ApacheHandler object.  Once you've created an
-interpreter, the main thing you'll want to do with it is call a
-component and do something with the output. To call a component, use
-Interp's exec() method:
-
-    $interp->exec(<comp> [,<..list of component params..>]);
-
-where I<comp> is a component path or component object.
-
-Component parameters are given as a series of name/value pairs, just
-as they are with C<$m-E<gt>comp>. exec returns the return value of
-the component. Component output is sent to standard output by default,
-but you can change this by specifying C<out_method>.
-
-=head2 Using Mason from a standalone script
-
-Here is a skeleton script that calls a component and places the output
-in a file:
-
-    my $outbuf;
-    my $interp = new HTML::Mason::Interp (comp_root=>'<component root>',
-					  data_dir=>'<data directory>',
-					  out_method=>\$outbuf);
-    my $retval = $interp->exec('<component path>', <args>...);
-    open(F,">mason.out");
-    print F $outbuf;
-    close(F);
-    print "return value of component was: $retval\n";
-
-This allows you to use Mason as a pure text templating solution --
-like Text::Template and its brethren, but with more power (and of
-course more complexity).
-
-You may also choose not to provide a component root, in which case the
-component root is the root directory of your filesystem.
-
-In this case, the C<< $interp->exec >> method will accept relative
-paths and treat them as being relative to the current directory.
-
-    my $outbuf;
-    my $interp = new HTML::Mason::Interp (data_dir=>'<data directory>',
-					  out_method=>\$outbuf);
-    my $retval = $interp->exec('../foo.comp', <args>...);
-    open(F,">mason.out");
-    print F $outbuf;
-    close(F);
-    print "return value of the ../foo.comp component was: $retval\n";
-
-=head2 Using Mason from a CGI script
-
-The easiest way to use Mason via a CGI script is with the L<CGIHandler
-module|HTML::Mason::CGIHandler> module.
-
-Here is a skeleton CGI script that calls a component and sends the
-output to the browser.
-
-    #!/usr/bin/perl
-    use HTML::Mason::CGIHandler;
-
-    my $h = new HTML::Mason::CGIHandler
-     (
-      data_dir  => '/home/jethro/code/mason_data',
-     );
-
-    $h->handle_request;
-
-The relevant portions of the httpd.conf file look like:
-
-    DocumentRoot /path/to/comp/root
-    ScriptAlias /cgi-bin/ /path/to/cgi-bin/
-
-    Action html-mason /cgi-bin/mason_handler.cgi
-    <FilesMatch "\.html$">
-     SetHandler html-mason
-    </FilesMatch>
-
-This simply causes Apache to call the mason_handler.cgi script every
-time a file under the component root is requested.  This script uses
-the L<CGIHandler class|HTML::Mason::CGIHandler> to do most of the
-heavy lifting.  See that class's documentation ofr more details.
 
 =head1 SEE ALSO
 

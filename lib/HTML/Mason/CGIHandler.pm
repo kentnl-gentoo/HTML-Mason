@@ -4,7 +4,6 @@ use strict;
 
 use HTML::Mason;
 use CGI;
-use Carp;
 use File::Spec;
 use Params::Validate qw(:all);
 
@@ -17,7 +16,6 @@ use HTML::Mason::MethodMaker
 
 __PACKAGE__->valid_params
     (
-     dev_dirs => {type => ARRAYREF, optional => 1},
      interp   => {isa => 'HTML::Mason::Interp'},
     );
 
@@ -31,76 +29,46 @@ __PACKAGE__->contained_objects
 
 sub new {
     my $package = shift;
+    my $self = $package->SUPER::new(comp_root => $ENV{DOCUMENT_ROOT},
+				    request_class => 'HTML::Mason::Request::CGI',
+				    error_mode => 'output',
+				    error_format => 'html',
+				    @_);
 
-    my @my_args = $package->create_contained_objects(comp_root => $ENV{DOCUMENT_ROOT},
-						     request_class => 'HTML::Mason::Request::CGI',
-						     error_mode => 'output',
-						     error_format => 'html',
-						     @_);
-
-    my $self = bless { validate @my_args, $package->validation_spec };
     $self->interp->out_method(\$self->{output});
     $self->interp->compiler->add_allowed_globals('$r');
     
     return $self;
 }
 
-sub exec {
-    my ($self, $component) = (shift, shift);
-    local $self->{exec_args} = [@_];
-    $self->_handler($component);
-}
-
 sub handle_request {
     my $self = shift;
-    $self->_handler($ENV{PATH_INFO}, @_);
+    $self->_handler( { comp => $ENV{PATH_INFO} }, @_ );
 }
 
-sub handle_cgi {
-    my ($self, $component) = (shift, shift);
-    $self->_handler($component, @_);
+sub handle_comp {
+    my ($self, $comp) = (shift, shift);
+    $self->_handler( { comp => $comp }, @_ );
+}
+
+sub handle_cgi_object {
+    my ($self, $cgi) = (shift, shift);
+    $self->_handler( { comp => $cgi->path_info,
+		       cgi       => $cgi },
+		     @_);
 }
 
 sub _handler {
-    my ($self, $component) = (shift, shift);
-    
-    my ($local_root, $local_datadir);
-    if ($self->{dev_dirs}) {
-	foreach my $dir (@{$self->{dev_dirs}}) {
-	    if ($component =~ s/^\Q$dir//) {
-		$local_root    = File::Spec->catdir($self->interp->resolver->comp_root, $dir);
-		$local_datadir = File::Spec->catdir($self->interp->data_dir, $dir);
-		last;
-	    }
-	}
-    }
+    my ($self, $p) = (shift, shift);
 
-    my $r = $self->create_delayed_object('cgi_request');
+    my $r = $self->create_delayed_object('cgi_request', cgi => $p->{cgi});
     $self->interp->set_global('$r', $r);
 
     $self->{output} = '';
-    my @params = $self->{exec_args} ? @{$self->{exec_args}} : $r->params;
-
-    my $old_root;
-    if ($local_root) {
-	$old_root = $self->interp->resolver->comp_root;
-	$self->interp->resolver->comp_root($local_root);
-    }
-
-    my $old_datadir;
-    if ($local_datadir) {
-	$old_datadir = $self->interp->data_dir($local_datadir);
-    }
 
     $self->interp->delayed_object_params('request', cgi_request => $r);
-    eval { $self->interp->exec($component, @params) };
-    # save it in case setting one of the attributes below uses eval{}
-    my $e = $@;
 
-    $self->interp->resolver->comp_root($old_root) if $old_root;
-    $self->interp->data_dir($old_datadir) if $old_datadir;
-
-    die $e if $e;
+    $self->interp->exec($p->{comp}, $r->params);
 
     if (@_) {
 	# This is a secret feature, and should stay secret (or go away) because it's just a hack for the test suite.
@@ -125,6 +93,18 @@ sub cgi_object {
     return $self->{cgi_request}->query(@_);
 }
 
+sub redirect {
+    my $self = shift;
+    my $url = shift;
+
+    $self->clear_buffer;
+
+    $self->{cgi_request}->header_out( Location => $url );
+    $self->{cgi_request}->http_header;
+
+    $self->abort;
+}
+
 ###########################################################
 package HTML::Mason::FakeApache;
 # Analogous to Apache request object $r (but not an actual Apache subclass)
@@ -133,14 +113,18 @@ use HTML::Mason::MethodMaker(read_write => [qw(query headers)]);
 
 sub new {
     my $class = shift;
+    my %p = @_;
+
     return bless {
-		  query   => new CGI(),
+		  query   => $p{cgi} || new CGI(),
 		  headers => {},
 		 }, $class;
 }
 
 sub header_out {
     my ($self, $header) = (shift, shift);
+
+    $header = $self->_canonical_header($header);
 
     return $self->_set_header($header, shift) if @_;
     return $self->headers->{$header};
@@ -149,19 +133,35 @@ sub header_out {
 sub content_type {
     my $self = shift;
 
-    return $self->_set_header('Content-type', shift) if @_;
-    return $self->headers->{'Content-type'};
+    my $header = $self->_canonical_header('Content-type');
+
+    return $self->_set_header($header, shift) if @_;
+    return $self->headers->{$header};
 }
 
 sub _set_header {
     my ($self, $header, $value) = @_;
+
     delete $self->headers->{$header}, return unless defined $value;
+
     return $self->headers->{$header} = $value;
+}
+
+sub _canonical_header {
+    my ($self, $header) = @_;
+
+    # CGI really wants a - before each header
+    $header = "-$header"  unless substr( $header, 0, 1 ) eq '-';
+
+    return lc $header;
 }
 
 sub http_header {
     my $self = shift;
-    my $method = exists $self->headers->{'-location'} ? 'redirect' : 'header';
+
+    my $location = $self->_canonical_header('Location');
+
+    my $method = exists $self->headers->{$location} ? 'redirect' : 'header';
     return $self->query->$method(%{$self->headers});
 }
 
@@ -196,7 +196,6 @@ A script at /cgi-bin/mason_handler.pl :
    
    my $h = new HTML::Mason::CGIHandler
     (
-     dev_dirs  => [qw(/cleetus /zeke)],
      data_dir  => '/home/jethro/code/mason_data',
      allow_globals => [qw(%session $u)],
     );
@@ -220,9 +219,9 @@ about the particular details of invoking Mason on each request.
 
 If you want to use Mason components from I<within> a regular CGI
 script (or any other Perl program, for that matter), then you don't
-need this module.  You can simply follow the directions in L<the
-STANDALONE MODE section in
-HTML::Mason::Interp|HTML::Mason::Interp/"STANDALONE MODE">.
+need this module.  You can simply follow the directions in
+L<HTLM::Mason::Admin/Using Mason from a standalone script|"Using Mason
+from a standalone script">.    
 
 This module also provides an C<$r> request object for use inside
 components, similar to the Apache request object under
@@ -238,14 +237,7 @@ provide direct access to the CGI query, should such access be necessary.
 =item * new()
 
 Creates a new handler.  Accepts any parameter that the Interpreter
-accepts, and also accepts a C<dev_dirs> parameter.  If a C<dev_dirs>
-parameter is passed, it should contain an array reference of
-directories that contain alternate copies of the entire site.  This
-helps facilitate seperate development copies when you can't afford to
-run a seperate development server.  Using C<dev_dirs> will have the
-effect of temporarily appending the given C<dev_dir> to the component
-root and data directory if the request is for a component in a
-C<dev_dir>.
+accepts.
 
 If no C<comp_root> parameter is passed to C<new()>, the component root
 will be C<$ENV{DOCUMENT_ROOT}>.
@@ -257,18 +249,27 @@ or C<STDIN> and sending headers and component output to C<STDOUT>.
 This method doesn't accept any parameters.  The initial component
 will be the one specified in C<$ENV{PATH_INFO}>.
 
-=item * handle_cgi()
+=item * handle_comp()
 
 Like C<handle_request()>, but the first (only) parameter is a
 component path or component object.  This is useful within a
 traditional CGI environment, in which you're essentially using Mason
 as a templating language but not an application server.
 
-C<handle_cgi()> will create a CGI query object, parse the query
+C<handle_component()> will create a CGI query object, parse the query
 parameters, and send the HTTP header and component output to STDOUT.
-If you want to handle those parts yourself, see L<Using Mason from a
-standalone script in HTML::Mason::Interp|HTML::Mason::Interp/"Using
-Mason from a standalone script">.
+If you want to handle those parts yourself, see L<Using
+Mason from a standalone script|HTML::Mason::Interp/"Using Mason
+from a standalone script">.
+
+=item * handle_cgi_object()
+
+Also like C<handle_request()>, but this method takes only a CGI object
+as its parameter.  This can be quite useful if you want to use this
+module with CGI::Fast.
+
+The component path will be the value of the CGI object's
+C<path_info()> method.
 
 =item * interp()
 

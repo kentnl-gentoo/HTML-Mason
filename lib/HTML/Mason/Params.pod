@@ -43,7 +43,7 @@ Type:               list
 
 Name in httpd.conf: AllowGlobals
 
-Belongs to:         HTML::Mason::Compiler
+Belongs to:         L<HTML::Mason::Compiler|HTML::Mason::Compiler>
 
 =item * apache_status_title
 
@@ -55,7 +55,7 @@ Default:            HTML::Mason status
 
 Name in httpd.conf: ApacheStatusTitle
 
-Belongs to:         HTML::Mason::ApacheHandler
+Belongs to:         L<HTML::Mason::ApacheHandler|HTML::Mason::ApacheHandler>
 
 =item * args_method
 
@@ -67,7 +67,7 @@ Default:            mod_perl
 
 Name in httpd.conf: ArgsMethod
 
-Belongs to:         HTML::Mason::ApacheHandler
+Belongs to:         L<HTML::Mason::ApacheHandler|HTML::Mason::ApacheHandler>
 
 =item * auto_send_headers
 
@@ -79,7 +79,7 @@ Default:            1
 
 Name in httpd.conf: AutoSendHeaders
 
-Belongs to:         HTML::Mason::Request::ApacheHandler
+Belongs to:         L<HTML::Mason::Request::ApacheHandler|HTML::Mason::Request::ApacheHandler>
 
 =item * autoflush
 
@@ -91,7 +91,7 @@ Default:            0
 
 Name in httpd.conf: Autoflush
 
-Belongs to:         HTML::Mason::Request
+Belongs to:         L<HTML::Mason::Request|HTML::Mason::Request>
 
 =item * autohandler_name
 
@@ -103,7 +103,7 @@ Default:            autohandler
 
 Name in httpd.conf: AutohandlerName
 
-Belongs to:         HTML::Mason::Interp
+Belongs to:         L<HTML::Mason::Interp|HTML::Mason::Interp>
 
 =item * buffer_class
 
@@ -113,7 +113,7 @@ Type:               string
 
 Name in httpd.conf: BufferClass
 
-Belongs to:         HTML::Mason::Request
+Belongs to:         L<HTML::Mason::Request|HTML::Mason::Request>
 
 This object is created multiple times by its container.
 
@@ -127,11 +127,11 @@ Default:            10485760
 
 Name in httpd.conf: CodeCacheMaxSize
 
-Belongs to:         HTML::Mason::Interp
+Belongs to:         L<HTML::Mason::Interp|HTML::Mason::Interp>
 
 =item * comp_class
 
-The class into which component object should be blessed
+The class into which component objects will be blessed
 
 Type:               string
 
@@ -139,7 +139,7 @@ Default:            HTML::Mason::Component
 
 Name in httpd.conf: CompClass
 
-Belongs to:         HTML::Mason::Compiler::ToObject
+Belongs to:         L<HTML::Mason::Compiler::ToObject|HTML::Mason::Compiler::ToObject>
 
 =item * comp_root
 
@@ -151,7 +151,7 @@ Default:            filesystem root
 
 Name in httpd.conf: CompRoot
 
-Belongs to:         HTML::Mason::Resolver::File
+Belongs to:         L<HTML::Mason::Resolver::File|HTML::Mason::Resolver::File>
 
 =item * compiler
 
@@ -161,7 +161,7 @@ Type:               object
 
 Default:            HTML::Mason::Compiler::ToObject->new
 
-Belongs to:         HTML::Mason::Interp
+Belongs to:         L<HTML::Mason::Interp|HTML::Mason::Interp>
 
 This object is created only once by its container.
 
@@ -173,7 +173,7 @@ Type:               string
 
 Name in httpd.conf: CompilerClass
 
-Belongs to:         HTML::Mason::Interp
+Belongs to:         L<HTML::Mason::Interp|HTML::Mason::Interp>
 
 This object is created only once by its container.
 
@@ -185,7 +185,7 @@ Type:               hash
 
 Name in httpd.conf: DataCacheDefaults
 
-Belongs to:         HTML::Mason::Request
+Belongs to:         L<HTML::Mason::Request|HTML::Mason::Request>
 
 =item * data_dir
 
@@ -195,7 +195,7 @@ Type:               string
 
 Name in httpd.conf: DataDir
 
-Belongs to:         HTML::Mason::Interp
+Belongs to:         L<HTML::Mason::Interp|HTML::Mason::Interp>
 
 =item * decline_dirs
 
@@ -207,7 +207,7 @@ Default:            1
 
 Name in httpd.conf: DeclineDirs
 
-Belongs to:         HTML::Mason::ApacheHandler
+Belongs to:         L<HTML::Mason::ApacheHandler|HTML::Mason::ApacheHandler>
 
 =item * default_escape_flags
 
@@ -217,7 +217,7 @@ Type:               string
 
 Name in httpd.conf: DefaultEscapeFlags
 
-Belongs to:         HTML::Mason::Compiler
+Belongs to:         L<HTML::Mason::Compiler|HTML::Mason::Compiler>
 
 =item * dhandler_name
 
@@ -229,7 +229,7 @@ Default:            dhandler
 
 Name in httpd.conf: DhandlerName
 
-Belongs to:         HTML::Mason::Interp
+Belongs to:         L<HTML::Mason::Request|HTML::Mason::Request>
 
 =item * error_format
 
@@ -241,7 +241,7 @@ Default:            text
 
 Name in httpd.conf: ErrorFormat
 
-Belongs to:         HTML::Mason::Request
+Belongs to:         L<HTML::Mason::Request|HTML::Mason::Request>
 
 =item * error_mode
 
@@ -253,7 +253,7 @@ Default:            fatal
 
 Name in httpd.conf: ErrorMode
 
-Belongs to:         HTML::Mason::Request
+Belongs to:         L<HTML::Mason::Request|HTML::Mason::Request>
 
 =item * ignore_warnings_expr
 
@@ -265,11 +265,11 @@ Default:            /Subroutine .* redefined/i
 
 Name in httpd.conf: IgnoreWarningsExpr
 
-Belongs to:         HTML::Mason::Interp
+Belongs to:         L<HTML::Mason::Interp|HTML::Mason::Interp>
 
 =item * in_package
 
-The package in which component execution should take place
+The package in which component execution will take place
 
 Type:               string
 
@@ -277,7 +277,7 @@ Default:            HTML::Mason::Commands
 
 Name in httpd.conf: InPackage
 
-Belongs to:         HTML::Mason::Compiler::ToObject
+Belongs to:         L<HTML::Mason::Compiler::ToObject|HTML::Mason::Compiler::ToObject>
 
 =item * interp
 
@@ -287,7 +287,7 @@ Type:               object
 
 Default:            HTML::Mason::Interp->new
 
-Belongs to:         HTML::Mason::ApacheHandler
+Belongs to:         L<HTML::Mason::ApacheHandler|HTML::Mason::ApacheHandler>
 
 This object is created only once by its container.
 
@@ -299,7 +299,7 @@ Type:               string
 
 Name in httpd.conf: InterpClass
 
-Belongs to:         HTML::Mason::ApacheHandler
+Belongs to:         L<HTML::Mason::ApacheHandler|HTML::Mason::ApacheHandler>
 
 This object is created only once by its container.
 
@@ -311,7 +311,7 @@ Type:               object
 
 Default:            HTML::Mason::Lexer->new
 
-Belongs to:         HTML::Mason::Compiler
+Belongs to:         L<HTML::Mason::Compiler|HTML::Mason::Compiler>
 
 This object is created only once by its container.
 
@@ -323,7 +323,7 @@ Type:               string
 
 Name in httpd.conf: LexerClass
 
-Belongs to:         HTML::Mason::Compiler
+Belongs to:         L<HTML::Mason::Compiler|HTML::Mason::Compiler>
 
 This object is created only once by its container.
 
@@ -337,7 +337,7 @@ Default:            32
 
 Name in httpd.conf: MaxRecurse
 
-Belongs to:         HTML::Mason::Interp
+Belongs to:         L<HTML::Mason::Request|HTML::Mason::Request>
 
 =item * out_method
 
@@ -345,11 +345,11 @@ A subroutine or scalar reference through which all output will pass
 
 Type:               code
 
-Default:            sub { print STDOUT {defined} @_ }
+Default:            sub { print STDOUT grep {defined} @_ }
 
 Name in httpd.conf: OutMethod
 
-Belongs to:         HTML::Mason::Request
+Belongs to:         L<HTML::Mason::Request|HTML::Mason::Request>
 
 =item * postamble
 
@@ -359,7 +359,7 @@ Type:               string
 
 Name in httpd.conf: Postamble
 
-Belongs to:         HTML::Mason::Compiler::ToObject
+Belongs to:         L<HTML::Mason::Compiler::ToObject|HTML::Mason::Compiler::ToObject>
 
 =item * postprocess_perl
 
@@ -369,7 +369,7 @@ Type:               code
 
 Name in httpd.conf: PostprocessPerl
 
-Belongs to:         HTML::Mason::Compiler
+Belongs to:         L<HTML::Mason::Compiler|HTML::Mason::Compiler>
 
 =item * postprocess_text
 
@@ -379,7 +379,7 @@ Type:               code
 
 Name in httpd.conf: PostprocessText
 
-Belongs to:         HTML::Mason::Compiler
+Belongs to:         L<HTML::Mason::Compiler|HTML::Mason::Compiler>
 
 =item * preamble
 
@@ -389,7 +389,7 @@ Type:               string
 
 Name in httpd.conf: Preamble
 
-Belongs to:         HTML::Mason::Compiler::ToObject
+Belongs to:         L<HTML::Mason::Compiler::ToObject|HTML::Mason::Compiler::ToObject>
 
 =item * preloads
 
@@ -399,7 +399,7 @@ Type:               list
 
 Name in httpd.conf: Preloads
 
-Belongs to:         HTML::Mason::Interp
+Belongs to:         L<HTML::Mason::Interp|HTML::Mason::Interp>
 
 =item * preprocess
 
@@ -409,7 +409,7 @@ Type:               code
 
 Name in httpd.conf: Preprocess
 
-Belongs to:         HTML::Mason::Compiler
+Belongs to:         L<HTML::Mason::Compiler|HTML::Mason::Compiler>
 
 =item * request_class
 
@@ -419,7 +419,7 @@ Type:               string
 
 Name in httpd.conf: RequestClass
 
-Belongs to:         HTML::Mason::Interp
+Belongs to:         L<HTML::Mason::Interp|HTML::Mason::Interp>
 
 This object is created multiple times by its container.
 
@@ -431,7 +431,7 @@ Type:               object
 
 Default:            HTML::Mason::Resolver::File->new
 
-Belongs to:         HTML::Mason::Interp
+Belongs to:         L<HTML::Mason::Interp|HTML::Mason::Interp>
 
 This object is created only once by its container.
 
@@ -443,7 +443,7 @@ Type:               string
 
 Name in httpd.conf: ResolverClass
 
-Belongs to:         HTML::Mason::Interp
+Belongs to:         L<HTML::Mason::Interp|HTML::Mason::Interp>
 
 This object is created only once by its container.
 
@@ -457,11 +457,11 @@ Default:            0
 
 Name in httpd.conf: StaticSource
 
-Belongs to:         HTML::Mason::Interp
+Belongs to:         L<HTML::Mason::Interp|HTML::Mason::Interp>
 
 =item * subcomp_class
 
-The class into which subcomponent objects should be blessed
+The class into which subcomponent objects will be blessed
 
 Type:               string
 
@@ -469,7 +469,7 @@ Default:            HTML::Mason::Component::Subcomponent
 
 Name in httpd.conf: SubcompClass
 
-Belongs to:         HTML::Mason::Compiler::ToObject
+Belongs to:         L<HTML::Mason::Compiler::ToObject|HTML::Mason::Compiler::ToObject>
 
 =item * use_object_files
 
@@ -481,7 +481,7 @@ Default:            1
 
 Name in httpd.conf: UseObjectFiles
 
-Belongs to:         HTML::Mason::Interp
+Belongs to:         L<HTML::Mason::Interp|HTML::Mason::Interp>
 
 =item * use_strict
 
@@ -493,7 +493,7 @@ Default:            1
 
 Name in httpd.conf: UseStrict
 
-Belongs to:         HTML::Mason::Compiler::ToObject
+Belongs to:         L<HTML::Mason::Compiler::ToObject|HTML::Mason::Compiler::ToObject>
 
 =back
 

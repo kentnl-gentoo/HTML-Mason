@@ -11,10 +11,13 @@ use HTML::Mason::Tools qw(absolute_comp_path);
 use Params::Validate qw(:all);
 Params::Validate::validation_options( on_fail => sub { param_error join '', @_  } );
 
+use HTML::Mason::Container;
+use base qw(HTML::Mason::Container);
+
 use HTML::Mason::Exceptions( abbr => ['error'] );
 use HTML::Mason::MethodMaker
     ( read_only => [ qw( code
-			 create_time
+			 load_time
 			 declared_args
 			 comp_id
 			 inherit_path
@@ -28,32 +31,27 @@ use HTML::Mason::MethodMaker
 		    ]
       );
 
-my %valid_params =
+__PACKAGE__->valid_params
     (
-     attr               => {type => HASHREF, default => {}},
-     code               => {type => CODEREF},
-     create_time        => {type => SCALAR,  optional => 1},
-     declared_args      => {type => HASHREF, default => {}},
-     dynamic_subs_init  => {type => CODEREF, default => sub {}},
-     flags              => {type => HASHREF, default => {}},
-     comp_id            => {type => SCALAR,  optional => 1},
-     methods            => {type => HASHREF, default => {}},
-     mfu_count          => {type => SCALAR,  default => 0},
-     object_size        => {type => SCALAR,  default => 0},
-     parser_version     => {type => SCALAR,  optional => 1}, # allows older components to be instantied
-     compiler_id        => {type => SCALAR,  optional => 1},
-     subcomps           => {type => HASHREF, default => {}},
+     attr               => {type => HASHREF, default => {}, public => 0},
+     code               => {type => CODEREF, public => 0, public => 0},
+     load_time          => {type => SCALAR,  optional => 1, public => 0},
+     declared_args      => {type => HASHREF, default => {}, public => 0},
+     dynamic_subs_init  => {type => CODEREF, default => sub {}, public => 0},
+     flags              => {type => HASHREF, default => {}, public => 0},
+     comp_id            => {type => SCALAR,  optional => 1, public => 0},
+     methods            => {type => HASHREF, default => {}, public => 0},
+     mfu_count          => {type => SCALAR,  default => 0, public => 0},
+     object_size        => {type => SCALAR,  default => 0, public => 0},
+     parser_version     => {type => SCALAR,  optional => 1, public => 0}, # allows older components to be instantied
+     compiler_id        => {type => SCALAR,  optional => 1, public => 0},
+     subcomps           => {type => HASHREF, default => {}, public => 0},
     );
-
-sub allowed_params { \%valid_params }
-sub validation_spec { return shift->allowed_params }
 
 sub new
 {
     my $class = shift;
-    my $self = bless {
-		      validate(@_, $class->validation_spec),
-		     }, $class;
+    my $self = $class->SUPER::new(@_);
 
     # Initialize subcomponent and method properties.
     while (my ($name,$c) = each(%{$self->{subcomps}})) {
@@ -386,7 +384,7 @@ attribute does not exist.
 Returns true if the specified attribute exists in this component or
 one of its parents, undef otherwise.
 
-=item create_time
+=item load_time
 
 Returns the time (in Perl time() format) when this component object
 was created.

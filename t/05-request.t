@@ -117,7 +117,7 @@ Some text
 % eval {$m->comp('support/abort_test')};
 % if (my $err = $@) {
 %   if ($m->aborted) {
-Component aborted with value <% $m->aborted_value %>
+Component aborted with value <% $err->aborted_value %>
 %   } else {
 Got error
 %   }
@@ -143,8 +143,8 @@ Some text
 
 % eval {$m->comp('support/abort_test', val => 0)};
 % if (my $err = $@) {
-%   if ($m->aborted) {
-Component aborted with value <% $m->aborted_value %>
+%   if ($m->aborted($err)) {
+Component aborted with value <% $err->aborted_value %>
 %   } else {
 Got error
 %   }
@@ -170,7 +170,7 @@ Some text
 % eval {$m->comp('support/abort_test')};
 % if (my $err = $@) {
 %   if ($m->aborted) {
-Component aborted with value <% $m->aborted_value %>
+Component aborted with value <% $err->aborted_value %>
 %   } else {
 Got error
 %   }
@@ -659,6 +659,56 @@ Some more text
 
 EOF
 		    );
+
+#------------------------------------------------------------
+
+    $group->add_support( path => '/subrequest2/autohandler',
+			 component => <<'EOF',
+I am the autohandler for <% $m->base_comp->name %>.
+% $m->call_next;
+<%flags>
+inherit => undef
+</%flags>
+EOF
+		       );
+
+#------------------------------------------------------------
+
+    $group->add_support( path => '/subrequest2/bar',
+			 component => <<'EOF',
+I am bar.
+EOF
+		       );
+
+#------------------------------------------------------------
+
+    $group->add_test( name => 'subreq_exec_order',
+		      path => '/subrequest2/subreq_exec_order',
+		      call_path => '/subrequest2/subreq_exec_order',
+		      description => 'Test that output from a subrequest comes out when we expect it to.',
+		      component => <<'EOF',
+% $m->subexec('/request/subrequest2/bar');
+I am subreq_exec_order.
+EOF
+		      expect => <<'EOF',
+I am the autohandler for subreq_exec_order.
+I am the autohandler for bar.
+I am bar.
+I am subreq_exec_order.
+EOF
+		    );
+
+#------------------------------------------------------------
+
+    $group->add_test( name => 'reexec',
+		      description => 'test that $m cannot be reexecuted',
+		      component => <<'EOF',
+<%init>
+$m->exec;
+</%init>
+EOF
+                      expect_error => qr/Can only call exec\(\) once/,
+                    );
 
 #------------------------------------------------------------
 

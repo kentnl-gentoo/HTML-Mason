@@ -37,6 +37,8 @@ BEGIN
 	 declined_comps => { type => HASHREF, optional=>1,
 			     descr => "Hash of components that have been declined in previous parent requests",
 			     public => 0 },
+	 dhandler_name => { parse => 'string',  default => 'dhandler', type => SCALAR,
+			    descr => "The filename to use for Mason's 'dhandler' capability" },
 	 interp     => { isa => 'HTML::Mason::Interp',
 			 descr => "An interpreter for Mason control functions",
 			 public => 0 },
@@ -48,6 +50,8 @@ BEGIN
 			 callbacks => { "must be one of 'output' or 'fatal'" =>
 					sub { $_[0] =~ /^(?:output|fatal)$/ } },
 			 descr => "How error conditions are returned to the caller (brief, text, line or html)" },
+	 max_recurse => { parse => 'string',  default => 32, type => SCALAR,
+			  descr => "The maximum recursion depth for component, inheritance, and request stack" },
 	 out_method => { parse => 'code',    type => CODEREF|SCALARREF,
 			 default => sub { print STDOUT grep {defined} @_ },
 			 descr => "A subroutine or scalar reference through which all output will pass" },
@@ -64,13 +68,13 @@ BEGIN
 my @read_write_params;
 BEGIN { @read_write_params = qw( autoflush
 				 data_cache_defaults
+				 dhandler_name
 				 error_format
 				 error_mode
+                                 max_recurse
                                  out_method ); }
 use HTML::Mason::MethodMaker
-    ( read_only => [ qw( aborted
-			 aborted_value
-			 count
+    ( read_only => [ qw( count
 			 dhandler_arg
 			 interp
 			 parent_request
@@ -81,24 +85,24 @@ use HTML::Mason::MethodMaker
                       @read_write_params ]
     );
 
+sub _properties { @read_write_params }
+
 sub new
 {
     my $class = shift;
+    my $self = $class->SUPER::new(@_);
 
-    my @args = $class->create_contained_objects(@_);
-
-    my $self = bless {validate( @args, $class->validation_spec ),
-		      aborted => undef,
-		      aborted_value => undef,
-		      buffer_stack => undef,
+    %$self = (%$self, buffer_stack => undef,
 		      count => 0,
 		      dhandler_arg => undef,
+	              execd => 0,
 		      parent_request => undef,
 		      request_depth => 0,
 		      stack => undef,
 		      wrapper_chain => undef,
 		      wrapper_index => undef,
-		     }, $class;
+	     );
+
     $self->{request_comp} = delete($self->{comp});
     $self->{request_args} = delete($self->{args});
     if (UNIVERSAL::isa($self->{request_args}, 'HASH')) {
@@ -146,7 +150,7 @@ sub _initialize {
 
 		# If path was not found, check for dhandler.
 		unless ($request_comp) {
-		    if ( $request_comp = $interp->find_comp_upwards($path, $interp->dhandler_name) ) {
+		    if ( $request_comp = $interp->find_comp_upwards($path, $self->dhandler_name) ) {
 			my $parent_path = $request_comp->dir_path;
 			($self->{dhandler_arg} = $self->{top_path}) =~ s{^$parent_path/?}{};
 		    }
@@ -156,8 +160,8 @@ sub _initialize {
 		# look for the next dhandler up the tree.
 		if ($request_comp and $self->{declined_comps}->{$request_comp->comp_id}) {
 		    $path = $request_comp->dir_path;
-		    unless ($path eq '/' and $request_comp->name eq $interp->dhandler_name) {
-			if ($request_comp->name eq $interp->dhandler_name) {
+		    unless ($path eq '/' and $request_comp->name eq $self->dhandler_name) {
+			if ($request_comp->name eq $self->dhandler_name) {
 			    $path =~ s/\/[^\/]+$//;
 			}
 		    }
@@ -179,6 +183,11 @@ sub _initialize {
 sub exec {
     my ($self) = @_;
     my $interp = $self->interp;
+
+    # Cheap way to prevent users from executing the same request twice.
+    if ($self->{execd}++) {
+	die "Can only call exec() once for a given request object. Did you want to use a subrequest?";
+    }
 
     # All errors returned from this routine will be in exception form.
     local $SIG{'__DIE__'} = sub {
@@ -206,8 +215,8 @@ sub exec {
 
 	    for (my $parent = $request_comp->parent; $parent; $parent = $parent->parent) {
 		unshift(@wrapper_chain,$parent);
-		error "inheritance chain length > " . $interp->max_recurse . " (infinite inheritance loop?)"
-		    if (@wrapper_chain > $interp->max_recurse);
+		error "inheritance chain length > " . $self->max_recurse . " (infinite inheritance loop?)"
+		    if (@wrapper_chain > $self->max_recurse);
 	    }
 
 	    $first_comp = $wrapper_chain[0];
@@ -232,7 +241,7 @@ sub exec {
 
     # Handle errors.
     my $err = $@;
-    if ($err and !$self->aborted) {
+    if ($err and !$self->aborted($err)) {
 	$self->pop_buffer_stack;
 	$interp->purge_code_cache;
 	$self->_handle_error($err);
@@ -248,7 +257,7 @@ sub exec {
     $interp->purge_code_cache;
 
     # Return aborted value or result.
-    return ($self->aborted ? $self->aborted_value : (wantarray ? @result : $result[0]));
+    return ($self->aborted($err) ? $err->aborted_value : (wantarray ? @result : $result[0]));
 }
 
 #
@@ -284,14 +293,19 @@ sub make_subrequest
     my $interp = $self->interp;
 
     # Give subrequest the same values as parent request for read/write params
-    my %defaults = map { ($_, $self->$_()) } @read_write_params;
+    my %defaults = map { ($_, $self->$_()) } $self->_properties;
+
+    unless ( $params{out_method} )
+    {
+	$defaults{out_method} = sub { $self->top_buffer->receive(@_) };
+    }
 
     # Make subrequest, and set parent_request and request_depth appropriately.
     my $subreq = $interp->make_request(%defaults, %params);
     $subreq->{parent_request} = $self;
     $subreq->{request_depth}  = $self->request_depth+1;
-    error "subrequest depth > " . $interp->max_recurse . " (infinite subrequest loop?)"
-	if $subreq->request_depth > $interp->max_recurse;
+    error "subrequest depth > " . $self->max_recurse . " (infinite subrequest loop?)"
+	if $subreq->request_depth > $self->max_recurse;
 
     return $subreq;
 }
@@ -308,10 +322,17 @@ sub is_subrequest
 #
 sub abort
 {
-    my ($self) = @_;
-    $self->{aborted} = 1;
-    $self->{aborted_value} = defined $_[1] ? $_[1] : $self->{aborted_value};
-    HTML::Mason::Exception::Abort->throw( error => 'Request->abort was called', aborted_value => $self->{aborted_value} );
+    my ($self, $aborted_value) = @_;
+    HTML::Mason::Exception::Abort->throw( error => 'Request->abort was called', aborted_value => $aborted_value );
+}
+
+#
+# Determine whether $err (or $@ by default) is an Abort exception.
+#
+sub aborted {
+    my ($self, $err) = @_;
+    $err = $@ if !defined($err);
+    return isa_mason_exception( $err, 'Abort' );
 }
 
 #
@@ -337,16 +358,6 @@ sub cache
     load_pkg('Cache::Cache', '$m->cache requires the Cache::Cache module, available from CPAN.');
     load_pkg($cache_class, 'Fix your Cache::Cache installation or choose another cache class.');
 
-    #
-    # This works around some silliness related to handling tainted
-    # strings in Cache::Cache 0.99.  Once DeWitt releases 1.0 we can
-    # remove this evil-ness.
-    #
-    if ( $Cache::Cache::VERSION < 1 ) {
-	local $^W;
-	*Cache::FileBackend::_Untaint_Path = sub { return Cache::FileBackend::_Untaint_String(shift, qr/(.*)/) };
-    }
-
     my $cache = $cache_class->new (\%options)
 	or error "could not create cache object";
 
@@ -359,7 +370,7 @@ sub cache_self {
     return if $self->top_stack->{in_cache_self};
 
     my $expires_in = delete $options{expires_in} || 'never';
-    my $key = delete $options{key} || '__cache_self__';
+    my $key = delete $options{key} || '__mason_cache_self__';
     my $cache = $self->cache(%options);
 
     my ($output, $retval);
@@ -653,7 +664,7 @@ sub comp {
     # Check for maximum recursion.
     #
     error "$depth levels deep in component stack (infinite recursive call?)\n"
-        if ($depth >= $interp->max_recurse);
+        if ($depth >= $self->max_recurse);
 
     #
     # $m is a dynamically scoped global containing this
@@ -792,8 +803,7 @@ sub request_args
     if (wantarray) {
 	return @{$self->{request_args}};
     } else {
-	my %h = @{$self->{request_args}};
-	return \%h;
+	return { @{$self->{request_args}} };
     }
 }
 *top_args = \&request_args;
@@ -965,6 +975,10 @@ been generated.
 
 The default parameters used when $m->cache is called.
 
+=item dhandler_name
+
+File name used for dhandlers. Default is "dhandler".
+
 =item error_format
 
 The format used to display errors.  The options are 'brief', 'text',
@@ -978,6 +992,12 @@ errors generate an exception.  With 'output' mode, the error is sent
 to the same output as normal component output.  The default is
 'fatal', except when running under ApacheHandler or CGIHandler, in
 which case the output is 'default'.
+
+=item max_recurse
+
+The maximum recursion depth for the component stack, for the request
+stack, and for the inheritance stack. An error is signalled if the
+maximum is exceeded.  Default is 32.
 
 =item out_method
 
@@ -1009,27 +1029,30 @@ through components. The optional argument specifies the return
 value from C<Interp::exec>; in a web environment, this ultimately
 becomes the HTTP status code.
 
-abort() is implemented via die() and can thus be caught by eval().
-
-The methods C<aborted> and C<aborted_value> return a boolean
-indicating whether the current request was aborted and the argument
-with which it was aborted, respectively. These would be used,
-for example, after an eval() returned with a non-empty C<$@>.
+C<abort> is implemented by throwing an HTML::Mason::Exception::Abort
+object and can thus be caught by eval(). The C<aborted> method is a
+shortcut for determining whether a caught error was generated by
+C<abort>.
 
 =for html <a name="item_aborted">
 
-=item aborted
+=item aborted ([$err])
 
-Returns true or undef indicating whether the current request was aborted
-with C<abort>.
+Returns true or undef indicating whether the specified C<$err>
+was generated by C<abort>. If no C<$err> was passed, use C<$@>.
 
-=for html <a name="item_aborted_value">
+In this code, we catch and process fatal errors while letting C<abort>
+exceptions pass through:
 
-=item aborted_value
+    eval { code_that_may_fail_or_abort() };
+    if ($@) {
+        die $@ if $m->aborted;
 
-Returns the argument passed to C<abort> when the request was
-aborted. Returns undef if the request was not aborted or was aborted
-without an argument.
+        # handle fatal errors...
+
+C<$@> can lose its value quickly, so if you are planning to call
+$m->aborted more than a few lines after the eval, you should save $@
+to a temporary variable.
 
 =for html <a name="item_base_comp">
 
@@ -1381,7 +1404,10 @@ the buffer cannot be flushed.
 =item instance
 
 This class method returns the C<HTML::Mason:::Request> currently in
-use.  If called when no Mason request is active it will return C<undef>.
+use.  If called when no Mason request is active it will return
+C<undef>.
+
+If called inside a subrequest, it returns the subrequest object.
 
 =for html <a name="item_interp">
 
@@ -1490,6 +1516,15 @@ See the L<Sending HTTP Headers section of the I<Component Developer's
 Guide>|HTML::Mason::Devel/"Sending HTTP Headers> for details about the
 automatic header feature.
 
+=back
+
+=head1 APACHE- OR CGI-ONLY METHOD
+
+This method is available when Mason is running under either the
+ApacheHandler or CGIHandler modules.
+
+=over 4
+
 =for html <a name="item_cgi_object">
 
 =item cgi_object
@@ -1498,8 +1533,16 @@ Returns the CGI object used to parse any CGI parameters submitted to
 the component, assuming that you have not changed the default value of
 the ApacheHandler C<args_method> parameter.  If you are using the
 'mod_perl' args method, then calling this method is a fatal error.
-See the L<HTML::Mason::ApacheHandler|HTML::Mason::ApacheHandler>
-documentation for more details.
+See the L<ApacheHandler|HTML::Mason::ApacheHandler> and
+L<CGIHandler|HTML::Mason::CGIHandler> documentation for more details.
+
+=for html <a name="item_redirect">
+
+=item redirect ($url)
+
+Given a url, this generates a proper HTTP redirect for that URL. It
+uses $m->clear_buffer to clear out any previous output, and $m->abort
+to abort the request with an appropriate status code.
 
 =back
 

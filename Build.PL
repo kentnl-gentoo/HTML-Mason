@@ -9,6 +9,31 @@ use Getopt::Long;
 my %opts;
 GetOptions( \%opts, 'no-prompts' );
 
+eval { require HTML::Mason };
+
+unless ($@)
+{
+    if ( $HTML::Mason::VERSION < 1.10 )
+    {
+	print <<"EOF";
+
+It looks like you have an older version of Mason already installed on
+your machine (version $HTML::Mason::VERSION).  This version is not backwards
+compatible with versions of Mason before version 1.09_01.
+Please read the UPGRADE document before continuing with this
+installation.
+
+EOF
+
+	unless ( $opts{'no-prompts'} )
+	{
+	    my $yn = prompt('Continue with installation?', 'N');
+
+	    exit unless $yn =~ /y(?:es)?/i;
+	}
+    }
+}
+
 setup_mod_perl_tests() unless $opts{'no-prompts'};
 #assisted_install_config() unless $opts{'no-prompts'};
 
@@ -21,8 +46,8 @@ my $class = Module::Build->subclass( code => <<'EOF' );
     my $self = shift;
     
     $self->SUPER::ACTION_install;
-    $self->run_script('install/delete_old_pods.pl');  # These could probably be separate actions.
-    $self->run_script('install/configure_apache.pl');
+    $self->run_perl_script('install/delete_old_pods.pl');  # These could probably be separate actions.
+    $self->run_perl_script('install/configure_apache.pl');
   }
 
   sub ACTION_test
@@ -42,12 +67,12 @@ my $build = $class->new
   (
    module_name => 'HTML::Mason',
    prereq => {
-	      'Data::Dumper' => 2.08,
 	      'File::Spec' => 0.8,
 	      'Params::Validate' => 0.14,
 	      'Apache::Request' => 0.31,
 	      'Exception::Class' => 1.00,
-	      'Cache::Cache' => 0.99,
+	      'Cache::Cache' => 1.00,
+	      'Params::Validate' => 0.16,
 	     },
    recommended => {
 		   

@@ -16,12 +16,6 @@ use HTML::Mason::ComponentSource;
 use HTML::Mason::Container;
 use base qw(HTML::Mason::Container);
 
-sub new
-{
-    my $class = shift;
-    return bless {validate(@_, $class->validation_spec)}, $class;
-}
-
 # Returns HTML::Mason::ComponentSource object
 sub get_info {
     shift->_virtual;
@@ -29,10 +23,6 @@ sub get_info {
 
 sub glob_path {
     shift->_virtual;
-}
-
-sub rel2abs {
-    return undef;
 }
 
 sub _virtual
@@ -87,15 +77,8 @@ implement the following methods.
 
 =item new
 
-This method is optional.  The new method included in this class does
-the following:
-
-  sub new
-  {
-      my $class = shift;
-      return bless {validate(@_, $class->validation_spec)}, $class;
-  }
-
+This method is optional.  The new method included in this class is
+simply inherited from C<HTML::Mason::Container>.
 If you need something more complicated done in your new method you
 will need to override it in your subclass.
 
@@ -113,17 +96,6 @@ list of component paths for components which match this glob pattern.
 For example, the filesystem resolver simply appends this pattern to
 each component root in turn and calls the Perl C<glob()> function to
 find matching files on the filesystem.
-
-=item rel2abs ($path)
-
-Given a relative component $path, returns its corresponding absolute path.
-The function may return undef indicating that only absolute paths are
-allowed - this is the default.
-
-This function is only called if $interp->exec or $interp->load
-receives a relative path. Relative paths to $m->comp and its siblings
-are automatically converted to absolute before being passed to the
-resolver.
 
 =back
 

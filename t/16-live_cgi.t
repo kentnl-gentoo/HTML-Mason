@@ -18,9 +18,12 @@ BEGIN
 
 use File::Basename;
 use File::Path;
+use File::Spec;
 use HTML::Mason::Tests;
 
-use lib 'lib', 't/lib';
+use lib 'lib', File::Spec->catdir('t', 'lib');
+
+require File::Spec->catfile( 't', 'live_server_lib.pl' );
 
 use Apache::test qw(skip_test have_httpd have_module);
 skip_test unless have_httpd;
@@ -30,20 +33,11 @@ local $| = 1;
 kill_httpd(1);
 test_load_apache();
 
-print "1..3\n";
+print "1..7\n";
 
 print STDERR "\n";
 
 write_test_comps();
-
-# This is a hack but otherwise the following tests fail if the Apache
-# server runs as any user other than root.  In real life, a user using
-# the multi-config option with httpd.conf must handle the file
-# permissions manually.
-if ( $> == 0 || $< == 0 )
-{
-    chmod 0777, "$ENV{APACHE_DIR}/data";
-}
 
 run_tests();
 
@@ -55,98 +49,8 @@ Basic test.
 EOF
 	      );
 
-    write_comp( 'headers', <<'EOF',
-
-
-% $r->header_out('X-Mason-Test' => 'New value 2');
-Blah blah
-blah
-% $r->header_out('X-Mason-Test' => 'New value 3');
-<%init>
-$r->header_out('X-Mason-Test' => 'New value 1');
-$m->abort if $blank;
-</%init>
-<%args>
-$blank=>0
-</%args>
-EOF
-	      );
-
-    write_comp( 'cgi_object', <<'EOF',
-<% UNIVERSAL::isa(eval { $m->cgi_object }, 'CGI') ? 'CGI' : 'NO CGI' %>
-EOF
-	      );
-
-    write_comp( 'params', <<'EOF',
-% foreach (sort keys %ARGS) {
-<% $_ %>: <% ref $ARGS{$_} ? join ', ', sort @{ $ARGS{$_} }, 'array' : $ARGS{$_} %>
-% }
-EOF
-	      );
-
-    write_comp( '_underscore', <<'EOF',
-I am underscore.
-EOF
-	      );
-
-    write_comp( 'dhandler/dhandler', <<'EOF',
-I am the dhandler.
-EOF
-	      );
-
-    write_comp( 'die', <<'EOF',
-% die 'Mine heart is pierced';
-EOF
-	      );
-
-    write_comp( 'apache_request', <<'EOF',
-% if ($r->isa('Apache::Request')) {
-Apache::Request
-% }
-EOF
-		  );
-
-    write_comp( 'multiconf1/foo', <<'EOF',
-I am foo in multiconf1
-comp root is <% $m->interp->resolver->comp_root =~ m,/comps/multiconf1$, ? 'multiconf1' : $m->interp->resolver->comp_root %>
-EOF
-	      );
-
-    write_comp( 'multiconf1/autohandler', <<'EOF'
-<& $m->fetch_next, autohandler => 'present' &>
-EOF
-	      );
-
-    write_comp( 'multiconf1/autohandler_test', <<'EOF'
-<%args>
-$autohandler => 'absent'
-</%args>
-autohandler is <% $autohandler %>
-EOF
-	      );
-
-
-    write_comp( 'multiconf2/foo', <<'EOF',
-I am foo in multiconf2
-comp root is <% $m->interp->resolver->comp_root =~ m,/comps/multiconf2$, ? 'multiconf2' : $m->interp->resolver->comp_root %>
-EOF
-	      );
-
-    write_comp( 'multiconf2/dhandler', <<'EOF',
-This should not work
-EOF
-	      );
-
-    write_comp( 'allow_globals', <<'EOF',
-% $foo = 1;
-% @bar = ( qw( a b c ) );
-$foo is <% $foo %>
-@bar is <% @bar %>
-EOF
-	      );
-
-    write_comp( 'decline_dirs', <<'EOF',
-decline_dirs is <% $m->ah->decline_dirs %>
+    write_comp( 'cgi_foo_param', <<'EOF',
+CGI foo param is <% $r->query->param('foo') %>
 EOF
 	      );
 
@@ -157,66 +61,17 @@ This is third.
 EOF
 	      );
 
-    write_comp( 'r_print', <<'EOF',
-This is first.
-% $r->print("This is second.\n");
-This is third.
-EOF
-	      );
-
-    write_comp( 'flush_buffer', <<'EOF',
-% $m->print("foo\n");
-% $m->flush_buffer;
-bar
-EOF
-	      );
-
-    write_comp( 'head_request', <<'EOF',
+    write_comp( 'redirect', <<'EOF',
 <%init>
-my $x = 1;
-foreach (keys %ARGS) {
-  $r->header_out( 'X-Mason-HEAD-Test' . $x++ => "$_: " . (ref $ARGS{$_} ? 'is a ref' : 'not a ref' ) );
-}
+$m->redirect('/comps/basic');
 </%init>
-We should never see this.
 EOF
 	      );
-}
-
-sub write_comp
-{
-    my $name = shift;
-    my $comp = shift;
-
-    my $file = "$ENV{APACHE_DIR}/comps/$name";
-    my $dir = dirname($file);
-    mkpath( $dir, 0, 0755 ) unless -d $dir;
-
-    open F, ">$file"
-	or die "Can't write to '$file': $!";
-
-    print F $comp;
-
-    close F;
-}
-
-# by wiping out the subdirectories here we can catch permissions
-# issues if some of the tests can't write to the data dir.
-sub cleanup_data_dir
-{
-    local *DIR;
-    opendir DIR, "$ENV{APACHE_DIR}/data"
-	or die "Can't open $ENV{APACHE_DIR}/data dir: $!";
-    foreach ( grep { -d "$ENV{APACHE_DIR}/data/$_" && $_ !~ /^\./ } readdir DIR )
-    {
-	rmtree("$ENV{APACHE_DIR}/data/$_");
-    }
-    closedir DIR;
 }
 
 sub run_tests
 {
-    start_httpd();
+    start_httpd('CGIHandler');
 
     {
 	my $path = '/comps/basic';
@@ -259,98 +114,61 @@ EOF
 	ok($success);
     }
 
+    {
+	my $path = '/comps/print/handle_comp';
+	my $response = Apache::test->fetch($path);
+	my $success = HTML::Mason::Tests->check_output( actual => $response->content,
+							expect => <<'EOF',
+This is first.
+This is second.
+This is third.
+EOF
+						      );
+
+	ok($success);
+    }
+
+    {
+	my $path = '/comps/print/handle_cgi_object';
+	my $response = Apache::test->fetch($path);
+	my $success = HTML::Mason::Tests->check_output( actual => $response->content,
+							expect => <<'EOF',
+This is first.
+This is second.
+This is third.
+EOF
+						      );
+
+	ok($success);
+    }
+
+    {
+	my $path = '/comps/cgi_foo_param/handle_cgi_object';
+	my $response = Apache::test->fetch($path);
+	my $success = HTML::Mason::Tests->check_output( actual => $response->content,
+							expect => <<'EOF',
+CGI foo param is bar
+EOF
+						      );
+
+	ok($success);
+    }
+
+    {
+	my $path = '/comps/redirect';
+	my $response = Apache::test->fetch($path);
+	my $success = HTML::Mason::Tests->check_output( actual => $response->content,
+							expect => <<'EOF',
+Basic test.
+2 + 2 = 4.
+EOF
+						      );
+
+	ok($success);
+    }
+
     kill_httpd();
 }
-
-sub get_pid {
-    local *PID;
-    open PID, "$ENV{APACHE_DIR}/httpd.pid"
-	or die "Can't open '$ENV{APACHE_DIR}/httpd.pid': $!";
-    my $pid = <PID>;
-    close PID;
-    chomp $pid;
-    return $pid;
-}
-
-sub test_load_apache
-{
-    print STDERR "\nTesting whether Apache can be started\n";
-    start_httpd('');
-    kill_httpd(1);
-}
-
-sub start_httpd
-{
-    my $cmd ="$ENV{APACHE_DIR}/httpd -DCGIHandler -f $ENV{APACHE_DIR}/httpd.conf";
-    print STDERR "Executing $cmd\n";
-    system ($cmd)
-	and die "Can't start httpd server as '$cmd': $!";
-
-    my $x = 0;
-    print STDERR "Waiting for httpd to start.\n";
-    until ( -e 't/httpd.pid' )
-    {
-	sleep (1);
-	$x++;
-	if ( $x > 10 )
-	{
-	    die "No t/httpd.pid file has appeared after 10 seconds.  ",
-		"There is probably a problem with the configuration file that was generated for these tests.";
-	}
-    }
-}
-
-sub kill_httpd
-{
-    my $wait = shift;
-    return unless -e "$ENV{APACHE_DIR}/httpd.pid";
-    my $pid = get_pid();
-
-    print STDERR "Killing httpd process ($pid)\n";
-    my $result = kill 'TERM', $pid;
-    if ( ! $result and $! =~ /no such (?:file|proc)/i )
-    {
-	# Looks like apache wasn't running, so we're done
-	unlink "$ENV{APACHE_DIR}/httpd.pid" or warn "Couldn't remove '$ENV{APACHE_DIR}/httpd.pid': $!";
-	return;
-    }
-    die "Can't kill process $pid: $!" if !$result;
-
-    if ($wait)
-    {
-	print STDERR "Waiting for httpd to shut down\n";
-	my $x = 0;
-	while ( -e "$ENV{APACHE_DIR}/httpd.pid" )
-	{
-	    sleep (1);
-	    $x++;
-	    if ( $x > 10 )
-	    {
-		my $result = kill 'TERM', $pid;
-		if ( ! $result and $! =~ /no such (?:file|proc)/i )
-		{
-		    # Looks like apache wasn't running, so we're done
-		    unlink "$ENV{APACHE_DIR}/httpd.pid" or warn "Couldn't remove '$ENV{APACHE_DIR}/httpd.pid': $!";
-		    return;
-		}
-		else
-		{
-		    die "$ENV{APACHE_DIR}/httpd.pid file still exists after 10 seconds.  Exiting.";
-		}
-	    }
-	}
-    }
-}
-
-use vars qw($TESTS);
-
-sub ok
-{
-    my $ok = !!shift;
-    print $ok ? 'ok ' : 'not ok ';
-    print ++$TESTS, "\n";
-}
-
 
 __END__
 

@@ -6,7 +6,7 @@ package HTML::Mason::Resolver::File;
 
 use strict;
 
-use Cwd qw(cwd);
+use Cwd;
 use File::Spec;
 use HTML::Mason::Tools qw(read_file);
 use Params::Validate qw(:all);
@@ -19,23 +19,20 @@ use HTML::Mason::Exceptions (abbr => ['param_error']);
 
 __PACKAGE__->valid_params
     (
-     comp_root    => { parse => 'list', type => SCALAR|ARRAYREF, default => File::Spec->rel2abs( File::Spec->rootdir ),
-		       descr => "A string or array of arrays indicating the search path for component calls" },
+     comp_root =>
+     { parse => 'list',
+       type => SCALAR|ARRAYREF,
+       default => File::Spec->rel2abs( Cwd::cwd ),
+       descr => "A string or array of arrays indicating the search path for component calls" },
     );
 
 sub new {
     my $package = shift;
-    my %p = @_;
 
     my $self = $package->SUPER::new(@_);
 
-    #
-    # no comp_root param was provided.
-    #
-    $self->{allow_relative_path} = ! exists $p{comp_root};
-
-    # Put it through the accessor to ensure proper data structure
-    $self->comp_root( $self->{comp_root} ) unless ref $self->{comp_root};
+    # Force comp_root into lol format
+    $self->{comp_root} = [[ MAIN => $self->{comp_root} ]] unless ref $self->{comp_root};
 
     # Check that directories are absolute.
     foreach my $pair ($self->comp_root_array) {
@@ -57,12 +54,7 @@ sub comp_root_array
 sub comp_root
 {
     my $self = shift;
-    if (@_)
-    {
-	validate_pos @_, {type => ARRAYREF|SCALAR};
-	$self->{comp_root} = ref($_[0]) ? $_[0] : [[ MAIN => $_[0] ]];
-    }
-    return unless $self->{comp_root};
+    die "Resolver comp_root is read-only" if @_;
     return $self->{comp_root}[0][1] if @{$self->{comp_root}} == 1 and $self->{comp_root}[0][0] eq 'MAIN';
     return $self->{comp_root};
 }
@@ -109,20 +101,6 @@ sub glob_path {
     return keys(%path_hash);
 }
 
-#
-# Resolve relative url_paths by cwd only if allow_relative_paths
-# flag is on (i.e. if no comp_root param was provided at creation).
-#
-sub rel2abs {
-    my ($self, $path) = @_;
-
-    if ($self->{allow_relative_path}) {
-	return join("/", File::Spec->splitdir( File::Spec->rel2abs(cwd) ), $path);
-    } else {
-	return undef;
-    }
-}
-
 1;
 
 __END__
@@ -135,14 +113,8 @@ HTML::Mason::Resolver::File - translates component paths into filesystem paths
 
   my $resolver = HTML::Mason::Resolver::File->new( comp_root => '/var/www/mason' );
 
-  my %comp_info = $resolver->get_info('/some/comp.html');
-
-  my $source = $resolver->get_source(%comp_info);
-
+  my $info = $resolver->get_info('/some/comp.html');
   my $comp_root = $resolver->comp_root;
-
-  # return "/some/comp.html"
-  my $comp_path = $resolver->file_to_path('/var/www/mason/some/comp.html');
 
 =head1 DESCRIPTION
 
@@ -151,6 +123,7 @@ on the filesystem, which is the norm for most Mason-based applications.
 
 =head1 CONSTRUCTOR
 
+=over
 
 =item comp_root
 
@@ -167,6 +140,12 @@ If it is an array reference, it should be of the following form:
 The "keys" for each path must be unique names and their "values" must
 be filesystem paths.  These paths will be searched in the provided
 order whenever a component path must be resolved to a filesystem path.
+
+This parameter defaults to the current working directory.  The
+ApacheHandler and CGIHandler modules default this parameter to the web
+server's document root.
+
+=back
 
 =head1 ADDITIONAL METHODS
 

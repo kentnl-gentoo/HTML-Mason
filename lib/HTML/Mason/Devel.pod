@@ -1,6 +1,6 @@
 =head1 NAME
 
-Devel.pod - Mason Developer's Manual
+HTML::Mason::Devel - Mason Developer's Manual
 
 =head1 DESCRIPTION
 
@@ -40,13 +40,13 @@ o L<In-Line Perl Sections|"In-Line Perl Sections">
 
 o L<Calling Components|"Calling Components">
 
+o L<Top-Level Components|"Top-Level Components">
+
 o L<Passing Parameters|"Passing Parameters">
 
 o L<Initialization and Cleanup|"Initialization and Cleanup"> (mainly C<< <%init> >>)
 
-o L<Data Caching|"Data Caching">
-
-o L<Sending HTTP Headers|"Sending HTTP Headers">
+o L<Web-Specific Features|"Web-Specific Features">
 
 o L<Common Traps|"Common Traps">
 
@@ -290,7 +290,7 @@ The component path. With a leading '/', the path is relative to the
 component root (C<comp_root>). Otherwise, it is relative to the
 location of the calling component.
 
-=item name=>value pairs:
+=item name => value pairs:
 
 Parameters are passed as one or more C<< name => value >> pairs,
 e.g. S<C<< player => 'M. Jordan' >>>.
@@ -551,10 +551,14 @@ the created request, all in one fell swoop.  This is useful in cases
 where you have no need to override any of the parent request's
 parameters.
 
+By default, output from a subrequest appears inline in the calling
+component, at the point where it is executed.  If you wish to do
+something else, you will need to explicitly override the subrequest's
+C<out_method> parameter.
+
 Mason Request objects are only designed to handle a single call to
-C<exec>.  If you wish to make multiple subrequests, we recommend
-creating a new subrequest object for each one.  The effect of calling
-C<exec> more than once on a given object is not predictable.
+C<exec>.  If you wish to make multiple subrequests, you must create
+a new subrequest object for each one.
 
 =head1 TOP-LEVEL COMPONENTS
 
@@ -1260,7 +1264,7 @@ but skips many options and features.
 
 =head2 Basic Usage
 
-The C<< <$m->cache >> method returns an object representing the cache
+The C<< $m->cache >> method returns an object representing the cache
 for this component. Here's the typical usage of C<< $m->cache >>:
 
     my $result = $m->cache->get('key');
@@ -1269,7 +1273,7 @@ for this component. Here's the typical usage of C<< $m->cache >>:
         $m->cache->set('key', $result);
     }
 
-C<< $m->>cache->get >> attempts to retrieve this component's cache
+C<< $m->cache->get >> attempts to retrieve this component's cache
 value. If the value is available it is placed in C<$result>. If the
 value is not available, C<$result> is computed and stored in the
 cache by C<< $m->cache->set >>.
@@ -1289,7 +1293,7 @@ You can fetch all the keys in a cache with
     my @idents = $m->cache->get_keys;
 
 It should be noted that Mason reserves all keys beginning with
-I<__cache_self__> for its own use.
+I<__mason> for its own use.
 
 =head2 Expiration
 
@@ -1398,7 +1402,9 @@ and the cache subclass is C<Cache::FileCache>:
 	 username => "mason");
     $cache->remove('key1');
 
-=head1 SENDING HTTP HEADERS
+=head1 WEB-SPECIFIC FEATURES
+
+=head2 Sending HTTP Headers
 
 Mason automatically sends HTTP headers via C<< $r->send_http_header >>
 but it will not send headers if they've already been sent manually.
@@ -1426,7 +1432,7 @@ into the header.
     my $cookie = $m->comp('/shared/get_user_cookie');
     if (!$cookie) {
 	$cookie = new CGI::Cookie (...);
-	$r->headers_out->add('Set-cookie' => $cookie);
+	$r->header_out('Set-cookie' => $cookie);
     }
     ...
     </%init>
@@ -1438,6 +1444,68 @@ output anything (given its functional nature, it shouldn't).
 The administrator can turn off automatic header sending via the
 L<Request's auto_send_headers|HTML::Mason::Request/auto_send_headers>
 parameter available when running Mason with the ApacheHandler module.
+
+=head2 Returning HTTP Status
+
+The value returned from the top-most component becomes the status code
+of the request. If no value is explicitly returned, it defaults to OK
+(0).
+
+Simply returning an error status (such as 404) from the top-most
+component has two problems in practice. First, the decision to return
+an error status often resides further down in the component
+stack. Second, you may have generated some content by the time this
+decision is made. (Both of these are more likely to be true when using
+autohandlers.)
+
+Thus the safer way to generate an error status is
+
+   $m->clear_buffer;
+   $m->abort($status);
+
+C<< $m->abort >> bypasses the component stack and ensure that
+C<$status> is returned from the top-most component. It works by
+throwing an exception. If you wrapped this code (directly or
+indirectly) in an eval, you must take care to rethrow the exception,
+or the status will not make it out:
+
+   eval { $m->comp('...') };
+   if ($@) {
+      if ($m->aborted) {
+          die $@;
+      } else {
+          # deal with non-abort exceptions
+      }
+   }
+
+=head2 External Redirects
+
+Because it is so commonly needed, Mason provides an external redirect
+method:
+
+    $m->redirect($url);    # Redirects with 302 status
+
+This method uses the clear_buffer/abort technique mentioned above,
+so the same warnings apply regarding evals.
+
+=head2 Internal Redirects
+
+There are two ways to perform redirects that are invisible to the
+client.
+
+First, you can use a Mason subrequest (see L</Subrequests>). This only
+works if you are redirecting to another Mason page.
+
+Second, you can use Apache's internal_redirect method, which works
+whether or not the new URL will be handled by Mason.  Use it this way:
+
+    $r->internal_redirect($url);
+    $m->auto_send_headers(0);
+    $m->clear_buffer;
+    $m->abort;
+
+The last three lines prevent the original request from accidentally
+generating extra headers or content.
 
 =head1 USING THE PERL DEBUGGER
 
@@ -1527,10 +1595,10 @@ number of arbitrarily named templates.
 =head2 Accessing methods and attributes
 
 A template can access methods and/or attributes of the requested
-page. First, use C<< $m->base_comp >> to get a handle on the
+page. First, use C<< $m->request_comp >> to get a handle on the
 appropriate component:
 
-    my $self = $m->base_comp;
+    my $self = $m->request_comp;
 
 $self now refers to the component corresponding to the requested page
 (the component at the end of the chain).
@@ -1539,26 +1607,54 @@ To access a method for the page, use C<call_method>:
 
     $self->call_method('header');
 
-or alternatively a path of the form 'SELF:method':
+This looks for a method named 'header' in the page component.  If no
+such method exists, the chain of parents is searched upwards, until
+ultimately a "method not found" error occurs. Use 'method_exists' to
+avoid this error for questionable method calls:
+
+    if ($self->method_exists('header')) { ...
+
+The component returned by the C<< $m->request_comp >> method never
+changes during request execution.  In contrast, the component returned
+by C<< $m->base_comp >> may change several times during request
+execution.
+
+When execution starts, the base component is the same as the requested
+component.  Whenever a component call is executed, the base component
+may become the component that was called.  The base component will
+change for all component calls B<except> in the following cases:
+
+=over
+
+=item
+
+A component is called via its component object rather than its path,
+for example:
+
+  <& $m->fetch_comp('/some/comp'), foo => 1 &>
+
+=item
+
+A method is called via the use of C<SELF:> or C<PARENT:>.  These are
+covered in more detail below.
+
+=back
+
+In all other cases, the base component is the called component or the
+called component's owner component if that called component is a
+method.
+
+As hinted at above, Mason provides a shortcut syntax for method calls.
+
+If a component call path starts with C<SELF:>, then Mason will start
+looking for the method (the portion of the call after C<SELF:>), in
+the base component.
 
     <& SELF:header &>
     $m->comp('SELF:header')
 
-In the context of a component path, SELF is shorthand for
-C<< $m->base_comp >>.
-
-Each of the above looks for a method named 'header' in the page
-component.  If no such method exists, the chain of parents is searched
-upwards, until ultimately a "method not found" error occurs. Use
-'method_exists' to avoid this error for questionable method calls:
-
-    if ($self->method_exists('header')) { ...
-
-To defer to the method of your parent, use C<parent>:
-
-    $m->current_comp->parent->call_method('header')
-
-or alternatively a path of the form 'PARENT:method':
+If the call path starts with C<PARENT:>, then Mason will start looking
+in the current component's parent for the named method.
 
     <& PARENT:header &>
     $m->comp('PARENT:header')

@@ -21,9 +21,12 @@ BEGIN
 
 use File::Basename;
 use File::Path;
+use File::Spec;
 use HTML::Mason::Tests;
 
-use lib 'lib', 't/lib';
+use lib 'lib', File::Spec->catdir('t', 'lib');
+
+require File::Spec->catfile( 't', 'live_server_lib.pl' );
 
 use Apache::test qw(skip_test have_httpd have_module);
 skip_test unless have_httpd;
@@ -34,8 +37,8 @@ kill_httpd(1);
 test_load_apache();
 
 my $tests = 4; # multi conf tests
-$tests += 42 if my $have_libapreq = have_module('Apache::Request');
-$tests += 32 if my $have_cgi      = have_module('CGI');
+$tests += 48 if my $have_libapreq = have_module('Apache::Request');
+$tests += 36 if my $have_cgi      = have_module('CGI');
 $tests++ if $have_cgi && $mod_perl::VERSION >= 1.24;
 print "1..$tests\n";
 
@@ -43,23 +46,23 @@ print STDERR "\n";
 
 write_test_comps();
 
-if ($have_libapreq) {        # 42 tests
+if ($have_libapreq) {        # 48 tests
     cleanup_data_dir();
-    apache_request_tests(1); # 18 tests
+    apache_request_tests(1); # 20 tests
 
     cleanup_data_dir();
-    apache_request_tests(0); # 13 tests
+    apache_request_tests(0); # 15 tests
 
     cleanup_data_dir();
-    no_config_tests();    # 11 tests
+    no_config_tests();       # 13 tests
 }
 
-if ($have_cgi) {             # 32 tests
+if ($have_cgi) {             # 36 tests (+ 1?)
     cleanup_data_dir();
-    cgi_tests(1);            # 18 tests + 1 if mod_perl version > 1.24
+    cgi_tests(1);            # 20 tests + 1 if mod_perl version > 1.24
 
     cleanup_data_dir();
-    cgi_tests(0);            # 14 tests
+    cgi_tests(0);            # 16 tests
 }
 
 cleanup_data_dir();
@@ -70,8 +73,9 @@ cleanup_data_dir();
 # permissions manually.
 if ( $> == 0 || $< == 0 )
 {
-    chmod 0777, "$ENV{APACHE_DIR}/data";
+    chmod 0777, File::Spec->( $ENV{APACHE_DIR}, 'data' );
 }
+
 multi_conf_tests();     # 4 tests
 
 sub write_test_comps
@@ -212,37 +216,32 @@ foreach (keys %ARGS) {
 We should never see this.
 EOF
 	      );
-}
 
-sub write_comp
-{
-    my $name = shift;
-    my $comp = shift;
+    write_comp( 'redirect', <<'EOF',
+<%init>
+$m->redirect('/comps/basic');
+</%init>
+EOF
+	      );
 
-    my $file = "$ENV{APACHE_DIR}/comps/$name";
-    my $dir = dirname($file);
-    mkpath( $dir, 0, 0755 ) unless -d $dir;
+    write_comp( 'internal_redirect', <<'EOF',
+<%init>
+$r->internal_redirect('/comps/internal_redirect_target?foo=17');
+$m->auto_send_headers(0);
+$m->clear_buffer;
+$m->abort;
+</%init>
+EOF
+	      );
 
-    open F, ">$file"
-	or die "Can't write to '$file': $!";
+    write_comp( 'internal_redirect_target', <<'EOF',
+The number is <% $foo %>.
+<%args>
+$foo
+</%args>
+EOF
+	      );
 
-    print F $comp;
-
-    close F;
-}
-
-# by wiping out the subdirectories here we can catch permissions
-# issues if some of the tests can't write to the data dir.
-sub cleanup_data_dir
-{
-    local *DIR;
-    opendir DIR, "$ENV{APACHE_DIR}/data"
-	or die "Can't open $ENV{APACHE_DIR}/data dir: $!";
-    foreach ( grep { -d "$ENV{APACHE_DIR}/data/$_" && $_ !~ /^\./ } readdir DIR )
-    {
-	rmtree("$ENV{APACHE_DIR}/data/$_");
-    }
-    closedir DIR;
 }
 
 sub cgi_tests
@@ -631,6 +630,38 @@ EOF
 						   );
 	ok($success);
     }
+
+    $path = '/comps/redirect';
+    $path = "/ah=0$path" if $with_handler;
+
+    $response = Apache::test->fetch($path);
+    $actual = filter_response($response, $with_handler);
+    $success = HTML::Mason::Tests->check_output( actual => $actual,
+						 expect => <<'EOF',
+X-Mason-Test: Initial value
+Basic test.
+2 + 2 = 4.
+uri = /basic.
+method = GET.
+
+
+Status code: 0
+EOF
+						  );
+    ok($success);
+
+    $path = '/comps/internal_redirect';
+    $path = "/ah=0$path" if $with_handler;
+    $response = Apache::test->fetch($path);
+    $actual = filter_response($response, $with_handler);
+    $success = HTML::Mason::Tests->check_output( actual => $actual,
+						 expect => <<'EOF',
+X-Mason-Test: Initial value
+The number is 17.
+Status code: 0
+EOF
+					       );
+    ok($success);
 }
 
 sub multi_conf_tests
@@ -701,7 +732,8 @@ sub filter_response
 		       'Initial value' ) ) );
     $actual .= "\n";
 
-    # Any headers starting with X-Mason are added, excluding X-Mason-Test, which is handled above
+    # Any headers starting with X-Mason are added, excluding
+    # X-Mason-Test, which is handled above
     my @headers;
     $response->headers->scan( sub { return if $_[0] eq 'X-Mason-Test' || $_[0] !~ /^X-Mason/;
 				    push @headers, [ $_[0], "$_[0]: $_[1]\n" ] } );
@@ -718,96 +750,3 @@ sub filter_response
 
     return $actual;
 }
-
-sub get_pid {
-    local *PID;
-    open PID, "$ENV{APACHE_DIR}/httpd.pid"
-	or die "Can't open '$ENV{APACHE_DIR}/httpd.pid': $!";
-    my $pid = <PID>;
-    close PID;
-    chomp $pid;
-    return $pid;
-}
-
-sub test_load_apache
-{
-    print STDERR "\nTesting whether Apache can be started\n";
-    start_httpd('');
-    kill_httpd(1);
-}
-
-sub start_httpd
-{
-    my $def = shift;
-    $def = "-D$def" if $def;
-
-    my $cmd ="$ENV{APACHE_DIR}/httpd $def -f $ENV{APACHE_DIR}/httpd.conf";
-    print STDERR "Executing $cmd\n";
-    system ($cmd)
-	and die "Can't start httpd server as '$cmd': $!";
-
-    my $x = 0;
-    print STDERR "Waiting for httpd to start.\n";
-    until ( -e 't/httpd.pid' )
-    {
-	sleep (1);
-	$x++;
-	if ( $x > 10 )
-	{
-	    die "No t/httpd.pid file has appeared after 10 seconds.  ",
-		"There is probably a problem with the configuration file that was generated for these tests.";
-	}
-    }
-}
-
-sub kill_httpd
-{
-    my $wait = shift;
-    return unless -e "$ENV{APACHE_DIR}/httpd.pid";
-    my $pid = get_pid();
-
-    print STDERR "Killing httpd process ($pid)\n";
-    my $result = kill 'TERM', $pid;
-    if ( ! $result and $! =~ /no such (?:file|proc)/i )
-    {
-	# Looks like apache wasn't running, so we're done
-	unlink "$ENV{APACHE_DIR}/httpd.pid" or warn "Couldn't remove '$ENV{APACHE_DIR}/httpd.pid': $!";
-	return;
-    }
-    die "Can't kill process $pid: $!" if !$result;
-
-    if ($wait)
-    {
-	print STDERR "Waiting for httpd to shut down\n";
-	my $x = 0;
-	while ( -e "$ENV{APACHE_DIR}/httpd.pid" )
-	{
-	    sleep (1);
-	    $x++;
-	    if ( $x > 10 )
-	    {
-		my $result = kill 'TERM', $pid;
-		if ( ! $result and $! =~ /no such (?:file|proc)/i )
-		{
-		    # Looks like apache wasn't running, so we're done
-		    unlink "$ENV{APACHE_DIR}/httpd.pid" or warn "Couldn't remove '$ENV{APACHE_DIR}/httpd.pid': $!";
-		    return;
-		}
-		else
-		{
-		    die "$ENV{APACHE_DIR}/httpd.pid file still exists after 10 seconds.  Exiting.";
-		}
-	    }
-	}
-    }
-}
-
-use vars qw($TESTS);
-
-sub ok
-{
-    my $ok = !!shift;
-    print $ok ? 'ok ' : 'not ok ';
-    print ++$TESTS, "\n";
-}
-

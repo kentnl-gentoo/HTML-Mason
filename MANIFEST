@@ -12,6 +12,18 @@ bin/convert0.8.pl
 eg/handler.pl
 eg/httpd.conf
 eg/session_handler.pl
+htdocs/Admin.html
+htdocs/ApacheHandler.html
+htdocs/CGIHandler.html
+htdocs/Component.html
+htdocs/ComponentSource.html
+htdocs/Devel.html
+htdocs/Interp.html
+htdocs/Mason.html
+htdocs/Params.html
+htdocs/Request.html
+htdocs/Resolver.html
+htdocs/index.html
 install/apache_tests_helper.pl
 install/assisted_install_helper.pl
 install/configure_apache.pl
@@ -73,7 +85,6 @@ samples/cd-me/tools/cd_details
 samples/cd-me/tools/cookie_manip
 samples/cd-me/welcome_msg
 samples/dump-request
-samples/preview
 samples/show-env
 t/01-syntax.t
 t/02-sections.t
@@ -93,4 +104,5 @@ t/15-subclass.t
 t/16-live_cgi.t
 t/17-print.t
 t/lib/Apache/test.pm
+t/live_server_lib.pl
 t/taint.comp

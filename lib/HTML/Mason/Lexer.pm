@@ -33,6 +33,11 @@ my %blocks = ( args    => 'variable_list_block',
 	       text    => 'text_block',
 	     );
 
+sub block_names
+{
+    return keys %blocks;
+}
+
 sub block_body_method
 {
     return $blocks{ $_[1] };
@@ -41,20 +46,13 @@ sub block_body_method
 {
     my $blocks_re;
 
-    my $re = join '|', keys %blocks;
+    my $re = join '|', __PACKAGE__->block_names;
     $blocks_re = qr/$re/i;
 
     sub blocks_regex
     {
 	return $blocks_re;
     }
-}
-
-sub new
-{
-    my $proto = shift;
-    my $class = ref $proto || $proto;
-    return bless { validate(@_, $class->validation_spec) }, $class;
 }
 
 sub lex
@@ -125,7 +123,9 @@ sub start
     my $self = shift;
 
     my $end;
-    while ( defined $self->{current}{pos} ? $self->{current}{pos} < length $self->{current}{comp_source} : 1 )
+    while ( defined $self->{current}{pos} ?
+	    $self->{current}{pos} < length $self->{current}{comp_source} :
+	    1 )
     {
 	last if $end = $self->match_end;
 
@@ -149,7 +149,7 @@ sub start
 	     $self->{current}{comp_source} =~ /\G\z/ )
 	{
 	    my $type = $self->{current}{in_def} ? 'def' : 'method';
-	    $self->throw_syntax_error("Component source ending in the middle of $type block");
+	    $self->throw_syntax_error("Missing closing </%$type> tag");
 	}
 
 	# We should never get here - if we do, we're in an infinite loop.
@@ -223,9 +223,9 @@ sub doc_block
 
 sub variable_list_block
 {
-    my $self = shift;
-    my %p = @_;
+    my ($self, %p) = @_;
 
+    my $ending = qr/ \n | <\/%\Q$p{block_type}\E> /x;
     while ( $self->{current}{comp_source} =~ m,
                        \G               # last pos matched
                        (?:
@@ -233,24 +233,33 @@ sub variable_list_block
                         ( [\$\@\%] )    # variable type
                         ( [^\W\d]\w* )  # only allows valid Perl variable names
                         [ \t]*
-			(?:             # this entire entire piece is optional
-			 =>
-                         ( [^\n]+ )     # default value
-		        )?
-                        (?:             # an optional comment
-                         [ \t]*
-                         \#
-                         [^\n]*
+                        # if we have a default arg we'll suck up
+                        # any comment it has as part of the default
+                        # otherwise explcitly search for a comment
+                        (?:
+                         (?:              # this entire entire piece is optional
+                           =>
+                          ( [^\n]+? )     # default value
+                         )
+                         |
+                         (?:              # an optional comment
+                          [ \t]*
+                          \#
+                          [^\n]*
+                         )
                         )?
+                        (?= $ending )
                         |
                         [ \t]*          # a comment line
                         \#
                         [^\n]*
+                        (?= $ending )
                         |
                         [ \t]*          # just space
                        )
-                       \n
-                      ,xgcs
+                       (?:\n |          # newline or
+                          (?= <\/%\Q$p{block_type}\E> ) )   # end of block (don't consume it)
+                      ,xgc
 	  )
     {
 	if ( defined $1 && defined $2 && length $1 && length $2 )
@@ -274,19 +283,25 @@ sub variable_list_block
 
 sub key_val_block
 {
-    my $self = shift;
-    my %p = @_;
+    my ($self, %p) = @_;
+
+    my $ending = qr, (?: \n |           # newline or
+                         (?= </%\Q$p{block_type}\E> ) )   # end of block (don't consume it)
+                   ,x;
 
     while ( $self->{current}{comp_source} =~ /
                       \G
                       [ \t]*
                       ([\w_]+)          # identifier
                       [ \t]*=>[ \t]*    # separator
-                      (\S[^\n]*)        # value ( must start with a non-space char)
-                      \n
+                      (\S[^\n]*?)        # value ( must start with a non-space char)
+                      $ending
                       |
-                      \G[ \t]*\n
-                     /gcx )
+                      \G\n
+                      |
+                      \G[ \t]+?
+                      $ending
+                     /xgc )
     {
 	if ( defined $1 && defined $2 && length $1 && length $2 )
 	{
@@ -308,8 +323,7 @@ sub key_val_block
 
 sub match_block_end
 {
-    my $self = shift;
-    my %p = @_;
+    my ($self, %p) = @_;
 
     my $re = $p{allow_text} ? qr,\G(.*?)</%\Q$p{block_type}\E>(\n?),is
                             : qr,\G()\s*</%\Q$p{block_type}\E>(\n?),is;
@@ -325,8 +339,7 @@ sub match_block_end
 
 sub match_named_block
 {
-    my $self = shift;
-    my %p = @_;
+    my ($self, %p) = @_;
 
     if ( $self->{current}{comp_source} =~ /\G<%(def|method)\s+([^\n]+?)>/igcs )
     {
@@ -445,27 +458,65 @@ sub match_text
 {
     my $self = shift;
 
+    #
+    # This regex is a bit weird, to say the least!
+    #
+    # Basically, we need to first check for "text" at the current
+    # position that we don't pass through as text.  This is either an
+    # escaped newline or an EOF.
+    #
+    # If we find one of those, we have matched some "text" but nothing
+    # that we pass through to the compiler.
+    #
+    # Otherwise, we try to match _at least_ one character of text
+    # following by some non-text production, which may be some sort of
+    # Mason syntax or an escaped newline or an EOF.
+    #
+    # It is important that we match at least one character or we can
+    # fail incorrectly on something like this:
+    #
+    #   <%foo>
+    #
+    # It doesn't match any of the previous productions but if found at
+    # the beginning of a component it will not match as text unless we
+    # can consume the first character, "<", before trying to match any
+    # more Mason syntax.
+    #
+    # Otherwise we'd match the empty string at the beginning, followed
+    # by "<%".
+    #
+    # - Dave - 1/6/2002
+    #
     if ( $self->{current}{comp_source} =~ m,
                     \G
-                    (.*?)       # anything
-		    (           # followed by
-                     (?<=\n)(?=%) # an eval line - consume the \n
+                    (?:
+                     (\\\n)      # an escaped newline  - throw away
                      |
-                     (?=</?%)   # a substitution or tag start or end  - don't consume
+                     \z          # or EOF.
                      |
-                     (?=</?&)   # a comp call start or end  - don't consume
-                     |
-                     \\\n       # an escaped newline  - throw away
-                     |
-                     \z         # or EOF.
+                     (?:
+                      (.+?)       # anything
+	              (           # followed by
+                       (?<=\n)(?=%) # an eval line - consume the \n
+                       |
+                       (?=</?%)   # a substitution or tag start or end  - don't consume
+                       |
+                       (?=</?&)   # a comp call start or end  - don't consume
+                       |
+                       \\\n       # an escaped newline  - throw away
+                       |
+                       \z         # or EOF.
+                      )
+                     )
                     )
                    ,gcsx
        )
     {
-	my $consumed = "$1$2";
+	my $consumed = join '', grep { defined } $1, $2, $3;
 	return 0 unless length $consumed;
 
-	$self->{current}{compiler}->text( text => $1 );
+	$self->{current}{compiler}->text( text => $2 ) if defined $2 && length $2;
+
 	$self->{current}{lines} += $consumed =~ tr/\n/\n/;
 	return 1;
     }

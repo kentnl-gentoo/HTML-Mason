@@ -53,10 +53,7 @@ use HTML::Mason::MethodMaker
 sub new
 {
     my $class = shift;
-
-    # Must assign to an actual array for validate() to work
-    my @args = $class->create_contained_objects(@_);
-    my $self = bless {validate(@args, $class->validation_spec)}, $class;
+    my $self = $class->SUPER::new(@_);
 
     # Verify the validity of the global names
     $self->allow_globals( @{$self->{allow_globals}} );
@@ -262,7 +259,9 @@ sub text
 
     $p{text} =~ s,(['\\]),\\$1,g;
 
-    $self->_add_body_code( "\$m->print( '$p{text}' );\n" ) if $p{text} ne '';
+    my $code = "\$m->print( '$p{text}' );\n";
+
+    $self->_add_body_code($code);
 }
 
 sub text_block
@@ -298,7 +297,10 @@ sub variable_declaration
 
     push @{ $self->{current_comp}{args} }, { type => $p{type},
 					     name => $p{name},
-					     default => $p{default} };
+					     default => $p{default},
+					     line => $self->lexer->line_number,
+					     file => $self->lexer->name,
+					   };
 }
 
 sub key_value_pair
@@ -456,7 +458,7 @@ sub _add_body_code
     my $self = shift;
     my $code = shift;
 
-    my $comment = '';
+    my $comment;
     if ( $self->lexer->line_number )
     {
 	my $line = $self->lexer->line_number;
@@ -516,7 +518,7 @@ sub _blocks
     return @{ $self->{current_comp}{blocks}{ shift() } };
 }
 
-sub HTML::Mason::Parser::new 
+sub HTML::Mason::Parser::new
 {
     die "The Parser module is no longer a part of HTML::Mason.  Please see ".
         "the Lexer and Compiler modules, its replacements.\n";
